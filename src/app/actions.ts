@@ -674,7 +674,8 @@ async function createSingleJiraIssue(
   projectId: string,
   issueData: Omit<DraftTicketRecursive, 'children' | 'suggestedId' | 'acceptanceCriteria'>,
   parentIssueKey?: string,
-  epicKey?: string
+  epicKey?: string,
+  mappedType?: string
 ): Promise<{ key: string, id: string }> {
     
     const descriptionADF = markdownToAdf(issueData.description);
@@ -683,14 +684,14 @@ async function createSingleJiraIssue(
       fields: {
         project: { id: projectId },
         summary: issueData.summary,
-        issuetype: { name: issueData.type },
+        issuetype: { name: mappedType || issueData.type },
         description: descriptionADF,
       }
     };
     
     // For regular issues (Story, Task, Bug) inside an Epic
     if (epicKey && issueData.type !== 'Epic' && issueData.type !== 'Sub-task') {
-        payload.fields[EPIC_LINK_CUSTOM_FIELD_ID] = epicKey;
+        payload.fields.parent = { key: epicKey };
     }
     
     // For sub-tasks
@@ -733,6 +734,39 @@ export async function createJiraTicketsAction(
     const createdTickets: {key: string; summary: string}[] = [];
     const errors: string[] = [];
 
+    // Fetch available issue types for the project
+    let availableIssueTypes: any[] = [];
+    try {
+        const projectResponse = await fetch(`${jiraUrl}/rest/api/3/project/${projectId}`, {
+            method: 'GET',
+            headers: { 'Authorization': authHeader, 'Accept': 'application/json' },
+        });
+        if (projectResponse.ok) {
+            const projectData = await projectResponse.json();
+            availableIssueTypes = projectData.issueTypes || [];
+        }
+    } catch (e) {
+        console.error("Failed to fetch project issue types", e);
+    }
+
+    function getValidIssueType(desiredType: string): string {
+        if (!availableIssueTypes.length) return desiredType;
+        const availableNames = availableIssueTypes.map(it => it.name);
+        if (availableNames.includes(desiredType)) return desiredType;
+
+        if (desiredType === 'Sub-task') {
+            const subtaskType = availableIssueTypes.find(it => it.subtask);
+            if (subtaskType) return subtaskType.name;
+        }
+
+        const standardTypes = availableIssueTypes.filter(it => !it.subtask && it.name !== 'Epic');
+        if (desiredType === 'Story' && availableNames.includes('Task')) return 'Task';
+        if (desiredType === 'Task' && availableNames.includes('Story')) return 'Story';
+        
+        if (standardTypes.length > 0) return standardTypes[0].name;
+        return desiredType;
+    }
+
     // Recursive function to process tickets
     async function processTicketsRecursive(
       ticketQueue: DraftTicketRecursive[], 
@@ -741,21 +775,17 @@ export async function createJiraTicketsAction(
     ) {
         for (const ticket of ticketQueue) {
             try {
-                // Determine the correct epic context for the current ticket
                 const currentEpicKey = ticket.type === 'Epic' ? undefined : epicKey;
+                const mappedType = getValidIssueType(ticket.type);
 
                 const createdIssue = await createSingleJiraIssue(
-                    authHeader, jiraUrl, projectId, ticket, parentKey, currentEpicKey
+                    authHeader, jiraUrl, projectId, ticket, parentKey, currentEpicKey, mappedType
                 );
                 
                 createdTickets.push({ key: createdIssue.key, summary: ticket.summary });
 
                 if (ticket.children && ticket.children.length > 0) {
-                    // If the current ticket is an Epic, its key becomes the epicKey for its children
-                    // Otherwise, pass down the existing epicKey
                     const nextEpicKeyForChildren = ticket.type === 'Epic' ? createdIssue.key : epicKey;
-                    
-                    // The current ticket becomes the parent for its children
                     await processTicketsRecursive(ticket.children, createdIssue.key, nextEpicKeyForChildren);
                 }
 

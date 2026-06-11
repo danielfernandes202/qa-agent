@@ -1,6 +1,6 @@
 
 import type { Metadata } from 'next';
-import { Geist } from 'next/font/google';
+import { Outfit, JetBrains_Mono } from 'next/font/google';
 import './globals.css';
 import { AppProviders } from '@/providers/AppProviders';
 import SiteLoader from '@/components/layout/site-loader';
@@ -9,8 +9,13 @@ import { cn } from '@/lib/utils';
 import ConditionalLayout from '@/components/layout/ConditionalLayout';
 import GlobalEffects from '@/components/layout/GlobalEffects';
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const outfit = Outfit({
+  variable: '--font-outfit',
+  subsets: ['latin'],
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  variable: '--font-jetbrains-mono',
   subsets: ['latin'],
 });
 
@@ -29,7 +34,8 @@ export default function RootLayout({
       <body
         className={cn(
           'min-h-screen bg-background font-sans antialiased',
-          geistSans.variable
+          outfit.variable,
+          jetbrainsMono.variable
         )}
       >
         <AppProviders>

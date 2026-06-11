@@ -1,4 +1,3 @@
-
 'use server';
 /**
  * @fileOverview Generates Playwright test code from a set of test cases and project context.
@@ -10,6 +9,7 @@
 
 import {ai} from '@/ai/genkit';
 import { GeneratePlaywrightCodeInputSchema, GeneratePlaywrightCodeOutputSchema, type GeneratePlaywrightCodeInput, type GeneratePlaywrightCodeOutput } from '@/lib/schemas';
+import { executeWithFallback } from '@/ai/fallback';
 
 export async function generatePlaywrightCode(input: GeneratePlaywrightCodeInput): Promise<GeneratePlaywrightCodeOutput> {
   return generatePlaywrightCodeFlow(input);
@@ -18,7 +18,6 @@ export async function generatePlaywrightCode(input: GeneratePlaywrightCodeInput)
 const generatePlaywrightCodePrompt = ai.definePrompt({
   name: 'generatePlaywrightCodePrompt',
   input: {schema: GeneratePlaywrightCodeInputSchema},
-  output: {schema: GeneratePlaywrightCodeOutputSchema},
   prompt: `You are an expert QA Automation Engineer specializing in writing clean, efficient, and robust Playwright tests using TypeScript. Your task is to generate a single, complete Playwright test file (\`.spec.ts\`) that implements the **Page Object Model (POM)** pattern based on the provided test cases and project context.
 
 Project Context:
@@ -60,9 +59,9 @@ Instructions for Code Generation:
 5.  **Boilerplate/Setup:**
     {{#if playwrightSetup.boilerplate}}
     *   **Crucially, start the file with this provided boilerplate code:**
-    \'\'\'typescript
+    \`\`\`typescript
     {{{playwrightSetup.boilerplate}}}
-    \'\'\'
+    \`\`\`
     {{else}}
     *   Include the standard Playwright import: \`import { test, expect, type Page } from '@playwright/test';\`
     {{/if}}
@@ -73,11 +72,11 @@ Instructions for Code Generation:
 8.  **Actions:** The test steps should be implemented by calling methods on the Page Object instances.
 9.  **Assertions:** Use the "Expected Result" to write clear Playwright assertions using \`expect()\`. Assertions can check the URL, visibility of elements, or text content by calling methods or accessing locators on the Page Objects (e.g., \`await expect(dashboardPage.header).toBeVisible();\`).
 10. **Comments:** Add comments within the test code to link back to the specific test steps. For example: \`// Step: Click the login button\`.
-11. **Code Quality:** The code must be clean, well-formatted, and follow best practices. It should be ready to be saved as a \`.spec.ts\` file and run. Do not include any explanatory text outside of the code block. The entire output should be the code itself.
+11. **Code Quality:** The code must be clean, well-formatted, and follow best practices. **CRITICAL:** The code MUST be properly formatted with line breaks (\n). DO NOT minify the code or put it all on one line. It should be ready to be saved as a \`.spec.ts\` file and run. Do not include any explanatory text outside of the code block. The entire output should be the code itself.
 12. **Authentication**: If an authentication flow is described, implement it within a \`test.beforeEach()\` block if it's a prerequisite for all tests, and it should use the Page Objects.
 
 **Example Structure:**
-\'\'\'typescript
+\`\`\`typescript
 import { test, expect, type Page } from '@playwright/test';
 import { executeWithFallback } from '@/ai/fallback';
 
@@ -118,7 +117,7 @@ test.describe('{{projectName}} - Feature Tests', () => {
     await expect(page).toHaveURL(/.*dashboard/);
   });
 });
-\'\'\'
+\`\`\`
 
 Now, generate the Playwright test code based on all the above instructions, ensuring the Page Object Model pattern is used.
 `,
@@ -131,6 +130,27 @@ const generatePlaywrightCodeFlow = ai.defineFlow(
     outputSchema: GeneratePlaywrightCodeOutputSchema,
   },
   async (input) => {
-    return await executeWithFallback(generatePlaywrightCodePrompt, input);
+    const models = [
+      'googleai/gemini-3.1-flash-lite',
+      'googleai/gemini-1.5-flash'
+    ];
+
+    for (const model of models) {
+      try {
+        console.log(`Attempting model for code gen (raw): ${model}`);
+        const res = await generatePlaywrightCodePrompt(input, { model });
+        
+        // When there is no output schema, the response text is the raw string
+        const text = res.text;
+        if (text) {
+          console.log(`Successfully used model: ${model}`);
+          return { playwrightCode: text };
+        }
+      } catch (e) {
+        console.warn(`Model ${model} failed:`, e);
+      }
+    }
+
+    throw new Error('All AI models failed to generate content or timed out. Please try again.');
   }
 );

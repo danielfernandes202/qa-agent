@@ -1,0 +1,2 @@
+[     393ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:24914
+[     566ms] [ERROR] Accessing element.ref was removed in React 19. ref is now a regular prop. It will be removed from the JSX Element type in a future release. @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/globals/intercept-console-error.js:49

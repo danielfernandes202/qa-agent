@@ -33,6 +33,8 @@ export function ProjectSelector({ disabled }: ProjectSelectorProps) {
   const { credentials } = useAuth();
   const { selectedProject, setSelectedProject } = useContext(ProjectContext);
   const [open, setOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedValue, setSelectedValue] = useState('');
 
   const { data: projects, isLoading, error } = useQuery<JiraProject[], Error>({
     queryKey: ['jiraProjects', credentials?.jiraUrl],
@@ -42,6 +44,40 @@ export function ProjectSelector({ disabled }: ProjectSelectorProps) {
     },
     enabled: !!credentials,
   });
+
+  const filteredProjects = React.useMemo(() => {
+    if (!projects) return [];
+    if (!searchQuery) return projects;
+    
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return projects;
+    
+    const scored = projects.map(project => {
+      const name = project.name.toLowerCase();
+      const key = project.key.toLowerCase();
+      const searchStr = `${name} ${key}`;
+      
+      let score = 0;
+      if (name === query || key === query) score = 100;
+      else if (name.startsWith(query) || key.startsWith(query)) score = 50;
+      else if (name.includes(query) || key.includes(query)) score = 10;
+      else {
+        // fuzzy matching
+        let i = 0;
+        for (const char of searchStr) {
+          if (char === query[i]) i++;
+          if (i === query.length) break;
+        }
+        if (i === query.length) score = 1;
+      }
+      return { project, score };
+    }).filter(p => p.score > 0);
+    
+    // Sort by score descending
+    scored.sort((a, b) => b.score - a.score);
+    
+    return scored.map(p => p.project);
+  }, [projects, searchQuery]);
 
   if (isLoading) {
     return (
@@ -93,12 +129,23 @@ export function ProjectSelector({ disabled }: ProjectSelectorProps) {
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0">
-          <Command>
-            <CommandInput placeholder="Search project..." />
+          <Command 
+            shouldFilter={false}
+            value={selectedValue}
+            onValueChange={setSelectedValue}
+          >
+            <CommandInput 
+              placeholder="Search project..." 
+              value={searchQuery} 
+              onValueChange={(val) => {
+                setSearchQuery(val);
+                setSelectedValue('');
+              }} 
+            />
             <CommandList>
               <CommandEmpty>No project found.</CommandEmpty>
               <CommandGroup>
-                {projects.map((project) => (
+                {filteredProjects.map((project) => (
                   <CommandItem
                     key={project.id}
                     value={`${project.name} ${project.key} ${project.id}`} 

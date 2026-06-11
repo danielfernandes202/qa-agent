@@ -11,6 +11,31 @@ const activeStreams = new Map<string, (type: string, data: any) => void>();
 export const maxDuration = 300; // Allow max 5 minutes for this serverless function
 export const dynamic = 'force-dynamic';
 
+async function generateWithFallback(options: any, logInternal: (msg: string) => void) {
+    try {
+        const res1 = await ai.generate({ ...options, model: 'googleai/gemini-3.1-flash-lite' });
+        logInternal("Using primary model: gemini-3.1-flash-lite");
+        return res1;
+    } catch (e: any) {
+        logInternal(`Primary model failed (${e.status || e.message}), falling back to secondary: gemma-4-31b-it`);
+        try {
+            const res2 = await ai.generate({ ...options, model: 'googleai/gemma-4-31b-it' });
+            logInternal("Using secondary model: gemma-4-31b-it");
+            return res2;
+        } catch (e2: any) {
+            logInternal(`Secondary model failed (${e2.status || e2.message}), falling back to tertiary: gemma-4-26b-a4b-it`);
+            try {
+                const res3 = await ai.generate({ ...options, model: 'googleai/gemma-4-26b-a4b-it' });
+                logInternal("Using tertiary model: gemma-4-26b-a4b-it");
+                return res3;
+            } catch (e3) {
+                logInternal("All models failed.");
+                throw new Error("All AI models failed during generation.");
+            }
+        }
+    }
+}
+
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
@@ -143,8 +168,12 @@ export async function POST(req: NextRequest) {
                                 const tag = el.tagName.toLowerCase();
                                 const id = el.id ? `#${el.id}` : '';
                                 const className = el.className && typeof el.className === 'string' ? `.${el.className.split(' ').join('.')}` : '';
+                                const type = el.getAttribute('type') ? `[type="${el.getAttribute('type')}"]` : '';
+                                const name = el.getAttribute('name') ? `[name="${el.getAttribute('name')}"]` : '';
+                                const placeholder = el.getAttribute('placeholder') ? `[placeholder="${el.getAttribute('placeholder')}"]` : '';
+                                const ariaLabel = el.getAttribute('aria-label') ? `[aria-label="${el.getAttribute('aria-label')}"]` : '';
                                 const text = (el as HTMLElement).innerText?.trim().substring(0, 30) || (el as HTMLInputElement).value || '';
-                                info += `${tag}${id}${className} - Text: "${text}"\n`;
+                                info += `${tag}${id}${className}${type}${name}${placeholder}${ariaLabel} - Text: "${text}"\n`;
                             });
                             return info || 'No interactive elements found.';
                         });
@@ -154,6 +183,9 @@ export async function POST(req: NextRequest) {
                     let chatHistory: any[] = [{
                         role: 'system',
                         content: [{ text: `You are an autonomous QA Testing Agent. Your task is to perform an end-to-end test on a webpage.
+You are currently navigated to the target application: ${url}
+You must ONLY test the provided target application URL. Never navigate to external websites or search engines.
+
 Your objective: ${instructions || "Explore the page, check for broken interactive elements, ensure the layout looks correct, and identify any accessibility issues."}
 
 Instructions:
@@ -167,6 +199,11 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                     let finalOutput: any = null;
 
                     while (actionCount < maxActions) {
+                        if (req.signal.aborted) {
+                            logInternal("Client disconnected, aborting test...");
+                            throw new Error("Test aborted by user.");
+                        }
+                        
                         actionCount++;
                         logInternal(`Starting AI Turn ${actionCount}...`);
                         
@@ -176,15 +213,46 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                         if (screenshotUri) {
                              userMessageContent.push({ media: { url: screenshotUri, contentType: 'image/jpeg' } });
                         }
+                        // Find the index of the last getPageInfoTool response so we don't truncate the one the agent JUST requested
+                        let lastGetPageInfoIndex = -1;
+                        for (let i = chatHistory.length - 1; i >= 0; i--) {
+                             const msg = chatHistory[i];
+                             if (msg.role === 'tool' && Array.isArray(msg.content)) {
+                                 if (msg.content.some((c: any) => c.toolResponse && typeof c.toolResponse.name === 'string' && c.toolResponse.name.startsWith('getPageInfoTool'))) {
+                                     lastGetPageInfoIndex = i;
+                                     break;
+                                 }
+                             }
+                        }
+
+                        // Prune old heavy items from history to save tokens and prevent 429
+                        for (let i = 0; i < chatHistory.length; i++) {
+                            const msg = chatHistory[i];
+                            if (msg.role === 'user' && Array.isArray(msg.content)) {
+                                // Keep only the last 2 screenshots to prevent massive token growth
+                                if (i < chatHistory.length - 4) {
+                                    msg.content = msg.content.filter((c: any) => !c.media);
+                                }
+                            }
+                            if (msg.role === 'tool' && Array.isArray(msg.content) && i !== lastGetPageInfoIndex) {
+                                for (const c of msg.content) {
+                                    if (c.toolResponse && typeof c.toolResponse.name === 'string' && c.toolResponse.name.startsWith('getPageInfoTool') && typeof c.toolResponse.output === 'string') {
+                                        if (c.toolResponse.output.length > 300) {
+                                             c.toolResponse.output = c.toolResponse.output.substring(0, 250) + '\n... [Older DOM info truncated to save tokens]';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                         chatHistory.push({ role: 'user', content: userMessageContent });
                         
                         logInternal(`Consulting LLM...`);
-                        const response = await ai.generate({
-                            model: 'googleai/gemini-3.1-flash-lite',
+                        const response = await generateWithFallback({
                             messages: chatHistory as any,
                             tools: [navigateTool, clickTool, typeTool, getPageInfoTool],
                             returnToolRequests: true,
-                        });
+                        }, logInternal);
 
                         chatHistory.push(response.message);
 
@@ -192,17 +260,20 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                             const toolResults: any[] = [];
                             for (const request of response.toolRequests) {
                                  let result;
-                                 if (request.tool.name === navigateTool.name) result = await navigateTool(request.tool.input as any);
-                                 else if (request.tool.name === clickTool.name) result = await clickTool(request.tool.input as any);
-                                 else if (request.tool.name === typeTool.name) result = await typeTool(request.tool.input as any);
-                                 else if (request.tool.name === getPageInfoTool.name) result = await getPageInfoTool(request.tool.input as any);
+                                 const tReq = request.toolRequest || request;
+                                 const tRef = request.toolRequest?.ref || request.ref;
+                                 if (tReq.name === `navigateTool_${sessionId}`) result = await navigateTool(tReq.input as any);
+                                 else if (tReq.name === `clickTool_${sessionId}`) result = await clickTool(tReq.input as any);
+                                 else if (tReq.name === `typeTool_${sessionId}`) result = await typeTool(tReq.input as any);
+                                 else if (tReq.name === `getPageInfoTool_${sessionId}`) result = await getPageInfoTool(tReq.input as any);
+                                 else result = `Error: Tool ${tReq.name} is not recognized.`;
                                  
-                                 if (result.includes("Successfully")) testsPerformed.push(`Performed: ${request.tool.name} - ${JSON.stringify(request.tool.input)}`);
+                                 if (result && result.includes && result.includes("Successfully")) testsPerformed.push(`Performed: ${tReq.name} - ${JSON.stringify(tReq.input)}`);
                                  
-                                 toolResults.push({ toolRequest: request, output: result });
+                                 toolResults.push({ toolRequest: tReq, ref: tRef, output: result });
                                  logInternal(`LLM observed result: ${result}`);
                             }
-                            chatHistory.push({ role: 'tool', content: toolResults.map(tr => ({ toolResponse: { ref: tr.toolRequest.ref, name: tr.toolRequest.tool.name, output: tr.output } })) });
+                            chatHistory.push({ role: 'tool', content: toolResults.map(tr => ({ toolResponse: { ref: tr.ref, name: tr.toolRequest.name, output: tr.output || "No output provided" } })) });
                         } else {
                             try {
                                 if (response.output) {
@@ -221,19 +292,19 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                                 chatHistory.push({ role: 'user', content: [{ text: "The JSON you provided did not match the requested schema exactly. Please provide the final JSON report again, making sure to include 'testsPerformed', 'bugsIdentified' (which requires 'title', 'description', 'severity', 'type', and 'suggestions' array), and 'agentLogs'." }] });
                                 continue;
                             }
-                            break;
+                            // If we reach here and there's no output and no tool calls, push a prompt to force LLM to continue
+                            chatHistory.push({ role: 'user', content: [{ text: "Please continue your analysis or output the final JSON report." }] });
                         }
                     }
                     
                     if (!finalOutput) {
-                         logInternal("Requesting final JSON summary from LLM...");
-                         const finalResponse = await ai.generate({
-                             model: 'googleai/gemini-3.1-flash-lite',
-                             messages: [...chatHistory, { role: 'user', content: [{ text: "Please provide the final JSON report now." }] }] as any,
-                             output: { schema: LiveTestingOutputSchema }
-                         });
-                         finalOutput = finalResponse.output;
-                    }
+                          logInternal("Requesting final JSON summary from LLM...");
+                          const finalResponse = await generateWithFallback({
+                              messages: [...chatHistory, { role: 'user', content: [{ text: "Please provide the final JSON report now." }] }] as any,
+                              output: { schema: LiveTestingOutputSchema }
+                          }, logInternal);
+                          finalOutput = finalResponse.output;
+                     }
 
                     if (!finalOutput) {
                         throw new Error("Agent failed to produce a valid report.");
@@ -245,12 +316,17 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                     send('result', finalOutput);
 
                 } catch (e: any) {
+                    console.error('LIVE TESTER ERROR:', e);
                     send('error', e.message || 'An error occurred during testing');
                 } finally {
                     activePages.delete(sessionId);
                     activeStreams.delete(sessionId);
                     if (browser) await browser.close();
-                    controller.close();
+                    try {
+                        controller.close();
+                    } catch (e) {
+                        // Ignore if already closed
+                    }
                 }
             }
         });

@@ -1,4 +1,4 @@
-﻿
+
 import { z } from 'zod';
 
 // Schemas for Test Case Generation
@@ -76,7 +76,7 @@ export const GeneratePlaywrightCodeInputSchema = z.object({
 export type GeneratePlaywrightCodeInput = z.infer<typeof GeneratePlaywrightCodeInputSchema>;
 
 export const GeneratePlaywrightCodeOutputSchema = z.object({
-    playwrightCode: z.string().describe("The generated Playwright test code as a single string."),
+    playwrightCode: z.string().describe("The generated Playwright test code. CRITICAL: This string MUST contain explicit \n newline characters to format the code properly across multiple lines. Do NOT generate minified or single-line code."),
 });
 export type GeneratePlaywrightCodeOutput = z.infer<typeof GeneratePlaywrightCodeOutputSchema>;
 

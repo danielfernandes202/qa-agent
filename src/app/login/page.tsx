@@ -50,7 +50,7 @@ export default function LoginPage() {
       const success = await login(values.email, values.password);
 
       if (success) {
-        const redirectTo = searchParams.get('redirect_to') || '/culinary-assistant';
+        const redirectTo = searchParams.get('redirect_to') || '/qa-test-assistant';
         router.push(redirectTo);
         toast({
           title: 'Login Successful',

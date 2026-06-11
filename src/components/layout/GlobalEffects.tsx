@@ -4,18 +4,28 @@
 import React, { useState, useEffect } from 'react';
 
 const NeuralParticles = () => {
+  const [mounted, setMounted] = useState(false);
+  const [particles, setParticles] = useState<Array<{top: string, left: string, animation: string, animationDelay: string}>>([]);
+
+  useEffect(() => {
+    setMounted(true);
+    setParticles([...Array(20)].map(() => ({
+      top: `${Math.random() * 100}%`,
+      left: `${Math.random() * 100}%`,
+      animation: `float-particle ${10 + Math.random() * 20}s linear infinite`,
+      animationDelay: `-${Math.random() * 20}s`
+    })));
+  }, []);
+
+  if (!mounted) return null;
+
   return (
     <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {[...Array(20)].map((_, i) => (
+      {particles.map((p, i) => (
         <div
           key={i}
           className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
-          style={{
-            top: `${Math.random() * 100}%`,
-            left: `${Math.random() * 100}%`,
-            animation: `float-particle ${10 + Math.random() * 20}s linear infinite`,
-            animationDelay: `-${Math.random() * 20}s`
-          }}
+          style={p}
         />
       ))}
     </div>

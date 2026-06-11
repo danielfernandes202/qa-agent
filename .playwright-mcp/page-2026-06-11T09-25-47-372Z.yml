@@ -1,0 +1,55 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link "QAgent" [ref=e5] [cursor=pointer]:
+          - /url: /
+          - img [ref=e7]
+          - generic [ref=e16]: QAgent
+        - navigation [ref=e17]:
+          - button "Tools" [ref=e18] [cursor=pointer]:
+            - text: Tools
+            - img [ref=e19]
+        - generic [ref=e22]:
+          - link "Log in" [ref=e23] [cursor=pointer]:
+            - /url: /login
+          - link "Sign up" [ref=e24] [cursor=pointer]:
+            - /url: /signup
+    - main [ref=e25]:
+      - img [ref=e27]
+    - contentinfo [ref=e29]:
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]:
+            - generic [ref=e33]:
+              - img [ref=e35]
+              - generic [ref=e44]: QAgent
+            - paragraph [ref=e45]: Empowering modern development teams with intelligent QA automation, visual testing, and Playwright code generation.
+            - generic [ref=e46]:
+              - img [ref=e47] [cursor=pointer]
+              - img [ref=e50] [cursor=pointer]
+              - img [ref=e52] [cursor=pointer]
+          - generic [ref=e56]:
+            - heading "Tools" [level=5] [ref=e57]
+            - list [ref=e58]:
+              - listitem [ref=e59]:
+                - link "Test Generator" [ref=e60] [cursor=pointer]:
+                  - /url: /qa-test-assistant/standalone-generator
+              - listitem [ref=e61]:
+                - link "Visual Tester" [ref=e62] [cursor=pointer]:
+                  - /url: /qa-test-assistant/visual-tester
+              - listitem [ref=e63]:
+                - link "Document Importer" [ref=e64] [cursor=pointer]:
+                  - /url: /qa-test-assistant/document-importer
+          - generic [ref=e65]:
+            - heading "Legal" [level=5] [ref=e66]
+            - list [ref=e67]:
+              - listitem [ref=e68]:
+                - link "Privacy Policy" [ref=e69] [cursor=pointer]:
+                  - /url: /privacy-policy
+              - listitem [ref=e70]:
+                - link "Terms of Service" [ref=e71] [cursor=pointer]:
+                  - /url: "#"
+        - generic [ref=e73]: © 2026 QAgent. All rights reserved.
+  - region "Notifications (F8)":
+    - list

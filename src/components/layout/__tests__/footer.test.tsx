@@ -12,7 +12,7 @@ describe('Footer Component', () => {
   ];
 
   const productLinks = [
-    { name: 'Culinary Assistant', href: '/culinary-assistant' },
+    { name: 'QAgent', href: '/qa-test-assistant' },
     { name: 'AI Health Planner', href: '/ai-health' },
     { name: 'AI Investment Advisor', href: '/investment-advisor' },
     { name: 'Cybersecurity Analyzer', href: '/cybersecurity-analyzer' },

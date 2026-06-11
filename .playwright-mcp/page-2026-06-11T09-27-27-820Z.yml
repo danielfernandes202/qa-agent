@@ -1,0 +1,85 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - link "QAgent" [ref=e5] [cursor=pointer]:
+          - /url: /
+          - img [ref=e7]
+          - text: QAgent
+        - navigation [ref=e16]:
+          - button "Tools" [ref=e17]:
+            - text: Tools
+            - img [ref=e18]
+        - generic [ref=e20]:
+          - generic [ref=e21]:
+            - link "Log in" [ref=e22] [cursor=pointer]:
+              - /url: /login
+            - link "Sign up" [ref=e23] [cursor=pointer]:
+              - /url: /signup
+          - button "Open menu" [ref=e24]:
+            - img [ref=e25]
+            - text: Open menu
+    - main [ref=e26]:
+      - complementary [ref=e29]:
+        - generic [ref=e30]:
+          - generic [ref=e31]:
+            - generic [ref=e32]:
+              - img [ref=e34]
+              - heading "QA Agent" [level=1] [ref=e36]
+            - paragraph [ref=e37]: Autonomous visual and functional testing. Enter a URL to start the live stream analysis.
+          - generic [ref=e39]:
+            - generic [ref=e40]:
+              - text: Target URL
+              - generic [ref=e41]:
+                - textbox "https://example.com" [ref=e42]: https://stytch.com/
+                - img [ref=e43]
+            - generic:
+              - generic [ref=e46]:
+                - text: Instructions (Optional)
+                - textbox "Instructions (Optional)" [ref=e47]:
+                  - /placeholder: e.g. Please test the login flow using test@example.com...
+              - generic [ref=e48]:
+                - text: Test Depth
+                - combobox "Test Depth" [ref=e49]:
+                  - img [ref=e50]
+                - combobox [ref=e52]
+            - button "Start Analysis" [ref=e53]:
+              - generic [ref=e54]:
+                - img [ref=e55]
+                - text: Start Analysis
+    - contentinfo [ref=e57]:
+      - generic [ref=e58]:
+        - generic [ref=e59]:
+          - generic [ref=e60]:
+            - generic [ref=e61]:
+              - img [ref=e63]
+              - text: QAgent
+            - paragraph [ref=e72]: Empowering modern development teams with intelligent QA automation, visual testing, and Playwright code generation.
+            - generic [ref=e73]:
+              - img [ref=e74]
+              - img [ref=e77]
+              - img [ref=e79]
+          - generic [ref=e83]:
+            - heading "Tools" [level=5] [ref=e84]
+            - list [ref=e85]:
+              - listitem [ref=e86]:
+                - link "Test Generator" [ref=e87] [cursor=pointer]:
+                  - /url: /qa-test-assistant/standalone-generator
+              - listitem [ref=e88]:
+                - link "Visual Tester" [ref=e89] [cursor=pointer]:
+                  - /url: /qa-test-assistant/visual-tester
+              - listitem [ref=e90]:
+                - link "Document Importer" [ref=e91] [cursor=pointer]:
+                  - /url: /qa-test-assistant/document-importer
+          - generic [ref=e92]:
+            - heading "Legal" [level=5] [ref=e93]
+            - list [ref=e94]:
+              - listitem [ref=e95]:
+                - link "Privacy Policy" [ref=e96] [cursor=pointer]:
+                  - /url: /privacy-policy
+              - listitem [ref=e97]:
+                - link "Terms of Service" [ref=e98] [cursor=pointer]:
+                  - /url: "#"
+        - generic [ref=e100]: © 2026 QAgent. All rights reserved.
+  - region "Notifications (F8)":
+    - list

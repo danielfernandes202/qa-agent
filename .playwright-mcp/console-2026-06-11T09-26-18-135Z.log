@@ -1,0 +1,476 @@
+[     800ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/compiled/react-dom/cjs/react-dom-client.development.js:24914
+[     934ms] [ERROR] Accessing element.ref was removed in React 19. ref is now a regular prop. It will be removed from the JSX Element type in a future release. @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/globals/intercept-console-error.js:49
+[     955ms] [ERROR] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+%s%s https://react.dev/link/hydration-mismatch 
+
+  ...
+    <RedirectErrorBoundary router={{...}}>
+      <Head>
+      <link>
+      <RootLayout>
+        <html lang="en" className="dark" style={{...}}>
+          <body className="min-h-scre...">
+            <AppProviders>
+              <QueryClientProvider client={{}}>
+                <AuthProvider>
+                  <LoaderProvider>
+                    <GlobalEffects>
+                      <div>
+                      <div className="fixed inse...">
+                        <div>
+                        <div>
+                        <NeuralParticles>
+                          <div className="absolute i...">
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "16.5898669762537%"
+-                               top: "78.4377%"
++                               left: "9.088272392036789%"
+-                               left: "16.9067%"
++                               animation: "float-particle 17.14302225873417s linear infinite"
++                               animationDelay: "-18.049205275259304s"
+-                               animation-duration: "28.8964s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-4.65296s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "47.71899942159453%"
+-                               top: "90.9198%"
++                               left: "9.628253920768238%"
+-                               left: "87.5707%"
++                               animation: "float-particle 26.84216073802939s linear infinite"
++                               animationDelay: "-10.143559596331018s"
+-                               animation-duration: "26.2259s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-1.75121s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "86.839518507087%"
+-                               top: "61.8373%"
++                               left: "87.1100366742664%"
+-                               left: "79.6443%"
++                               animation: "float-particle 10.159745222416767s linear infinite"
++                               animationDelay: "-15.070181771414239s"
+-                               animation-duration: "15.7224s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-4.88086s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "20.22327823093837%"
+-                               top: "83.224%"
++                               left: "6.191156572933842%"
+-                               left: "97.4105%"
++                               animation: "float-particle 26.22134905709922s linear infinite"
++                               animationDelay: "-17.400688239795446s"
+-                               animation-duration: "18.5193s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-12.1802s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "58.142858452637014%"
+-                               top: "56.7913%"
++                               left: "35.49888305320484%"
+-                               left: "66.3407%"
++                               animation: "float-particle 16.63541420213427s linear infinite"
++                               animationDelay: "-7.713471442144055s"
+-                               animation-duration: "13.3941s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-7.40153s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "94.99393822087355%"
+-                               top: "48.8053%"
++                               left: "88.89167099328714%"
+-                               left: "11.9639%"
++                               animation: "float-particle 17.816182555010272s linear infinite"
++                               animationDelay: "-8.405318529031316s"
+-                               animation-duration: "14.0989s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-18.8687s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "59.557527997339086%"
+-                               top: "19.9282%"
++                               left: "44.116613074089585%"
+-                               left: "16.2468%"
++                               animation: "float-particle 18.208998603714452s linear infinite"
++                               animationDelay: "-3.0672575591682127s"
+-                               animation-duration: "10.2675s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-4.83123s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "66.0921501458667%"
+-                               top: "98.0824%"
++                               left: "9.991380186631249%"
+-                               left: "13.9267%"
++                               animation: "float-particle 14.77755616721251s linear infinite"
++                               animationDelay: "-16.42640276939509s"
+-                               animation-duration: "10.844s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-13.5968s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "84.03845699275028%"
+-                               top: "60.2775%"
++                               left: "55.2646223761836%"
+-                               left: "39.4486%"
++                               animation: "float-particle 14.683786318446115s linear infinite"
++                               animationDelay: "-6.056711385495421s"
+-                               animation-duration: "23.775s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-10.7239s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "66.57776274139499%"
+-                               top: "49.7817%"
++                               left: "26.91246307900205%"
+-                               left: "66.6243%"
++                               animation: "float-particle 15.856420532411393s linear infinite"
++                               animationDelay: "-8.016515667897131s"
+-                               animation-duration: "16.2095s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-7.87744s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "36.36490984760437%"
+-                               top: "80.8398%"
++                               left: "27.607361037090282%"
+-                               left: "60.7147%"
++                               animation: "float-particle 26.036070368106937s linear infinite"
++                               animationDelay: "-18.425078738850505s"
+-                               animation-duration: "12.6105s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-13.0524s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "44.14177305945708%"
+-                               top: "3.19722%"
++                               left: "15.481431574151605%"
+-                               left: "32.2358%"
++                               animation: "float-particle 16.471709201933436s linear infinite"
++                               animationDelay: "-12.427428699865654s"
+-                               animation-duration: "25.2956s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-3.513s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "24.112356385413435%"
+-                               top: "3.54371%"
++                               left: "10.200149076738562%"
+-                               left: "11.0665%"
++                               animation: "float-particle 10.782647264489224s linear infinite"
++                               animationDelay: "-15.675080038939335s"
+-                               animation-duration: "28.0851s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-14.7237s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "57.27226492036451%"
+-                               top: "7.44589%"
++                               left: "68.86875882844376%"
+-                               left: "11.0439%"
++                               animation: "float-particle 24.218874348424688s linear infinite"
++                               animationDelay: "-8.539228815534177s"
+-                               animation-duration: "19.3349s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-19.0781s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "26.319999496047007%"
+-                               top: "44.2352%"
++                               left: "27.696568526805176%"
+-                               left: "91.9909%"
++                               animation: "float-particle 12.291395312733542s linear infinite"
++                               animationDelay: "-6.73662543106486s"
+-                               animation-duration: "14.7899s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-12.7756s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "21.66409518421957%"
+-                               top: "73.4162%"
++                               left: "21.214975280568606%"
+-                               left: "55.874%"
++                               animation: "float-particle 15.750749527848944s linear infinite"
++                               animationDelay: "-3.324299084494764s"
+-                               animation-duration: "21.7843s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-14.4176s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "25.613142580140803%"
+-                               top: "22.6123%"
++                               left: "18.381606559368592%"
+-                               left: "96.8083%"
++                               animation: "float-particle 25.704979632034707s linear infinite"
++                               animationDelay: "-18.011308336426367s"
+-                               animation-duration: "16.6021s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-11.1916s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "7.170748937251281%"
+-                               top: "48.9696%"
++                               left: "98.76340411964796%"
+-                               left: "65.4999%"
++                               animation: "float-particle 25.39392988374856s linear infinite"
++                               animationDelay: "-18.02741615665224s"
+-                               animation-duration: "19.2852s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-0.34723s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "11.275279351726164%"
+-                               top: "9.62654%"
++                               left: "11.119804687124024%"
+-                               left: "53.4993%"
++                               animation: "float-particle 23.532427673455082s linear infinite"
++                               animationDelay: "-9.401736188165176s"
+-                               animation-duration: "15.9819s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-17.8889s"
+                              }}
+                            >
+                            <div
+                              className="absolute w-1 h-1 bg-cyan-500/20 rounded-full"
+                              style={{
++                               top: "39.08812360897088%"
+-                               top: "42.8194%"
++                               left: "40.44901710246187%"
+-                               left: "19.4035%"
++                               animation: "float-particle 14.450138336920057s linear infinite"
++                               animationDelay: "-12.673632663833308s"
+-                               animation-duration: "23.5061s"
+-                               animation-timing-function: "linear"
+-                               animation-iteration-count: "infinite"
+-                               animation-direction: "normal"
+-                               animation-fill-mode: "none"
+-                               animation-play-state: "running"
+-                               animation-name: "float-particle"
+-                               animation-timeline: "auto"
+-                               animation-range-start: "normal"
+-                               animation-range-end: "normal"
+-                               animation-delay: "-1.17617s"
+                              }}
+                            >
+                        ...
+                    ...
+      ...
+ @ webpack-internal:///(app-pages-browser)/./node_modules/next/dist/client/components/globals/intercept-console-error.js:49

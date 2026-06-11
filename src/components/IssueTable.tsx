@@ -190,7 +190,7 @@ export function IssueTable({
                                 variant="outline"
                                 size="sm"
                                 onClick={() => onViewIssueClick(issue)}
-                                className="shadow-sm hover:shadow-md transition-shadow"
+                                className="shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
                                 disabled={isActionDisabled}
                             >
                                 <Eye className="mr-0 sm:mr-2 h-4 w-4" />
@@ -201,7 +201,7 @@ export function IssueTable({
                         variant="outline"
                         size="sm"
                         onClick={() => onActionClick && onActionClick(issue)}
-                        className="shadow-sm hover:shadow-md transition-shadow"
+                        className="shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
                         disabled={isActionDisabled || !actionType}
                         >
                         {React.cloneElement(icon, { className: "mr-0 sm:mr-2 h-4 w-4" })}
@@ -227,7 +227,7 @@ export function IssueTable({
               size="icon"
               onClick={() => setCurrentPage(1)}
               disabled={currentPage === 1 || isFetching || isActionDisabled}
-              className="h-8 w-8"
+              className="h-8 w-8 transition-transform active:scale-[0.98]"
             >
               <ChevronsLeft className="h-4 w-4" />
             </Button>
@@ -236,7 +236,7 @@ export function IssueTable({
               size="icon"
               onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
               disabled={currentPage === 1 || isFetching || isActionDisabled}
-              className="h-8 w-8"
+              className="h-8 w-8 transition-transform active:scale-[0.98]"
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
@@ -245,7 +245,7 @@ export function IssueTable({
               size="icon"
               onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
               disabled={currentPage === totalPages || isFetching || isActionDisabled}
-              className="h-8 w-8"
+              className="h-8 w-8 transition-transform active:scale-[0.98]"
             >
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -254,7 +254,7 @@ export function IssueTable({
               size="icon"
               onClick={() => setCurrentPage(totalPages)}
               disabled={currentPage === totalPages || isFetching || isActionDisabled}
-              className="h-8 w-8"
+              className="h-8 w-8 transition-transform active:scale-[0.98]"
             >
               <ChevronsRight className="h-4 w-4" />
             </Button>

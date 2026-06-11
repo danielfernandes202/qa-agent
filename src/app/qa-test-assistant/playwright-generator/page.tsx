@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback, useContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, useRef } from 'react';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { PlaywrightSetupSchema, type PlaywrightSetup, type GenerateTestCasesOutput } from '@/lib/schemas';
@@ -41,6 +41,7 @@ export default function PlaywrightGeneratorPage() {
   const [isTicketPreviewOpen, setIsTicketPreviewOpen] = useState(false);
   const [isAttaching, setIsAttaching] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const artifactsRef = useRef<HTMLDivElement>(null);
 
   const [isClient, setIsClient] = useState(false);
   useEffect(() => { setIsClient(true); }, []);
@@ -80,7 +81,7 @@ export default function PlaywrightGeneratorPage() {
       description: issue.description || '',
       acceptanceCriteria: issue.acceptanceCriteria || '',
       projectKey: issue.project.key,
-      coverageLevel: 'Basic',
+      coverageLevel: 'Max',
     })
     .then(testCases => {
       setGeneratedTestCases(testCases);
@@ -95,6 +96,9 @@ export default function PlaywrightGeneratorPage() {
     })
     .then(codeResult => {
       setGeneratedCode(codeResult.playwrightCode);
+      setTimeout(() => {
+        artifactsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
     })
     .catch(err => {
       setError(err.message || "An unexpected error occurred during generation.");
@@ -276,7 +280,7 @@ export default function PlaywrightGeneratorPage() {
         )}
 
         {!isGenerating && (generatedTestCases || generatedCode) && (
-            <Card className="mt-8">
+            <Card className="mt-8" ref={artifactsRef}>
                 <CardHeader>
                     <CardTitle className="text-2xl">
                         Generated Artifacts for {selectedIssue?.key}: <span className="text-muted-foreground font-normal text-xl">{selectedIssue?.summary}</span>
@@ -309,7 +313,7 @@ export default function PlaywrightGeneratorPage() {
                                         </Button>
                                     </div>
                                     )}
-                                    <div className="max-h-[60vh] overflow-y-auto relative border rounded-lg">
+                                    <div className="h-[60vh] overflow-y-auto relative border rounded-lg">
                                     <Table>
                                         <TableHeader className="sticky top-0 bg-card shadow-sm">
                                             <TableRow>
@@ -349,9 +353,9 @@ export default function PlaywrightGeneratorPage() {
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="relative">
-                                    <div className="max-h-[60vh] overflow-y-auto rounded-md bg-gray-900">
-                                    <SyntaxHighlighter language="typescript" style={vscDarkPlus} customStyle={{ margin: 0, padding: '1rem', background: 'transparent' }} wrapLongLines={true}>
-                                        {generatedCode || "// Code will appear here..."}
+                                    <div className="h-[60vh] overflow-y-auto overflow-x-auto rounded-md bg-gray-900 border">
+                                    <SyntaxHighlighter language="typescript" style={vscDarkPlus} customStyle={{ margin: 0, padding: '1rem', background: 'transparent' }}>
+                                        {generatedCode ? generatedCode.replace(/\\n/g, '\n').replace(/^```(?:typescript)?\n?/i, '').replace(/```$/i, '').trim() : "// Code will appear here..."}
                                     </SyntaxHighlighter>
                                     </div>
                                     {generatedCode && (

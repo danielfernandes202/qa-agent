@@ -1,0 +1,145 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: 224 71% 4%; /* #010206 */
+    --foreground: 210 40% 98%; /* slate-200 */
+ 
+    --card: 224 71% 4%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 224 71% 4%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 188 85% 53%; /* cyan-500 #22d3ee */
+    --primary-foreground: 222.2 47.4% 11.2%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 188 85% 53%;
+
+    --chart-1: 188 85% 53%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 280 88% 60%;
+    --chart-5: 0 84% 60%;
+  }
+
+  .dark {
+    --background: 224 71% 4%; /* #010206 */
+    --foreground: 210 40% 98%; /* slate-200 */
+ 
+    --card: 224 71% 4%;
+    --card-foreground: 210 40% 98%;
+ 
+    --popover: 224 71% 4%;
+    --popover-foreground: 210 40% 98%;
+ 
+    --primary: 188 85% 53%; /* cyan-500 #22d3ee */
+    --primary-foreground: 222.2 47.4% 11.2%;
+ 
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+ 
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+ 
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+ 
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+ 
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 188 85% 53%;
+
+    --chart-1: 188 85% 53%;
+    --chart-2: 217 91% 60%;
+    --chart-3: 38 92% 50%;
+    --chart-4: 280 88% 60%;
+    --chart-5: 0 84% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@keyframes grid-flow {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(40px); }
+}
+@keyframes float-particle {
+  0% { transform: translate(0, 0) scale(1); opacity: 0; }
+  20% { opacity: 0.5; }
+  80% { opacity: 0.5; }
+  100% { transform: translate(100px, -100px) scale(0.5); opacity: 0; }
+}
+@keyframes float-hero {
+  0%, 100% { transform: translateY(0) rotate(0); }
+  50% { transform: translateY(-15px) rotate(0.5deg); }
+}
+@keyframes border-beam {
+  0% { top: -100%; left: -100%; }
+  25% { top: -100%; left: 100%; }
+  50% { top: 100%; left: 100%; }
+  75% { top: 100%; left: -100%; }
+  100% { top: -100%; left: -100%; }
+}
+@keyframes noise {
+  0%, 100% { transform: translate(0,0); }
+  10% { transform: translate(-1%,-1%); }
+  30% { transform: translate(1%,1%); }
+  50% { transform: translate(-0.5%,0.5%); }
+  70% { transform: translate(0.5%,-0.5%); }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.cyber-grid {
+  background-image: linear-gradient(to right, rgba(255,255,255,0.03) 1px, transparent 1px),
+                    linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 60% 50% at 50% 0%, #000 60%, transparent 100%);
+}
+.border-beam-line {
+  position: absolute;
+  width: 200px;
+  height: 200px;
+  background: conic-gradient(from 0deg at 50% 50%, transparent 0%, #22d3ee 50%, transparent 100%);
+  animation: border-beam 4s linear infinite;
+}
+.noise-overlay {
+  position: fixed;
+  inset: -200%;
+  background-image: url('https://www.transparenttextures.com/patterns/natural-paper.png');
+  opacity: 0.015;
+  pointer-events: none;
+  z-index: 100;
+  animation: noise 0.2s steps(2) infinite;
+}

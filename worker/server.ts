@@ -20,8 +20,8 @@ const ai = genkit({
 
 const app = express();
 
-const allowedOrigins = process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL 
-    ? [process.env.FRONTEND_URL] 
+const allowedOrigins = process.env.FRONTEND_URL 
+    ? [process.env.FRONTEND_URL, 'http://localhost:3000', 'http://localhost:3002'] 
     : ['http://localhost:3000', 'http://localhost:3002'];
 
 app.use(cors({ origin: allowedOrigins }));

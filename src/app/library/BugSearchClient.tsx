@@ -24,7 +24,9 @@ export default function BugSearchClient() {
         setHasSearched(true);
 
         try {
-            const res = await searchSimilarBugs(query);
+            const { supabase } = await import('@/lib/supabase');
+            const { data: { session } } = await supabase.auth.getSession();
+            const res = await searchSimilarBugs(query, 0.4, 10, session?.access_token);
             if (res.error) {
                 setError(res.error);
             } else {

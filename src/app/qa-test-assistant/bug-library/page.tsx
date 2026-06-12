@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Badge } from '@/components/ui/badge';
 import { Search, MonitorSmartphone, AlertCircle, Calendar } from 'lucide-react';
 import { searchSimilarBugs, VisualBugResult } from '@/app/actions/vector-search';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 
@@ -35,7 +36,8 @@ export default function BugLibraryPage() {
         setIsSearching(true);
         setHasSearched(true);
         try {
-            const { bugs, error } = await searchSimilarBugs(searchQuery, 0.4, 12);
+            const { data: { session } } = await supabase.auth.getSession();
+            const { bugs, error } = await searchSimilarBugs(searchQuery, 0.4, 12, session?.access_token);
             if (error) {
                 toast({
                     variant: "destructive",

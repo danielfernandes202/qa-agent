@@ -13,7 +13,7 @@ export interface VisualBugResult {
     similarity: number;
 }
 
-export async function searchSimilarBugs(query: string, matchThreshold: number = 0.5, matchCount: number = 10): Promise<{ bugs: VisualBugResult[], error?: string }> {
+export async function searchSimilarBugs(query: string, matchThreshold: number = 0.5, matchCount: number = 10, accessToken?: string): Promise<{ bugs: VisualBugResult[], error?: string }> {
     if (!query) return { bugs: [], error: 'Query is required' };
 
     try {
@@ -46,8 +46,23 @@ export async function searchSimilarBugs(query: string, matchThreshold: number = 
 
         const vectorStr = `[${vector.join(',')}]`;
 
+        // Create an authenticated client if a token is provided
+        let client = supabase;
+        if (accessToken) {
+            const { createClient } = await import('@supabase/supabase-js');
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+            const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
+            client = createClient(supabaseUrl, supabaseAnonKey, {
+                global: {
+                    headers: {
+                        Authorization: `Bearer ${accessToken}`
+                    }
+                }
+            });
+        }
+
         // Query Supabase RPC
-        const { data, error } = await supabase.rpc('match_visual_bugs', {
+        const { data, error } = await client.rpc('match_visual_bugs', {
             query_embedding: vectorStr,
             match_threshold: matchThreshold,
             match_count: matchCount

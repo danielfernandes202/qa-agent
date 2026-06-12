@@ -5,7 +5,7 @@ import SignupPage from '../page';
 import { useAuth } from '@/context/auth-context';
 import { useToast } from '@/hooks/use-toast';
 import { useLoader } from '@/context/loader-context';
-import { FirebaseError } from 'firebase/app';
+import { AuthError } from '@supabase/supabase-js';
 
 // Mock dependencies
 jest.mock('@/context/auth-context', () => ({
@@ -71,14 +71,14 @@ describe('Signup Page', () => {
     await waitFor(() => {
         expect(mockToast).toHaveBeenCalledWith({
             title: 'Account Created',
-            description: 'Welcome to Francis Legacy!',
+            description: 'Welcome to QAgent!',
         });
         expect(mockHideLoader).toHaveBeenCalledTimes(1);
     });
   });
 
   it('shows an error toast for an email already in use', async () => {
-    const error = new FirebaseError('auth/email-already-in-use', 'Firebase: Error (auth/email-already-in-use).');
+    const error = new AuthError('User already registered', 400, 'User already registered');
     mockSignup.mockRejectedValue(error);
     render(<SignupPage />);
 
@@ -102,13 +102,13 @@ describe('Signup Page', () => {
   });
 
    it('shows an error toast for a weak password', async () => {
-    const error = new FirebaseError('auth/weak-password', 'Firebase: Error (auth/weak-password).');
+    const error = new AuthError('Password should be at least 6 characters.', 400, 'Password should be at least 6 characters.');
     mockSignup.mockRejectedValue(error);
     render(<SignupPage />);
 
     fireEvent.change(screen.getByLabelText(/name/i), { target: { value: 'Test User' } });
     fireEvent.change(screen.getByLabelText(/email/i), { target: { value: 'test@example.com' } });
-    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: '123' } });
+    fireEvent.change(screen.getByLabelText(/password/i), { target: { value: 'password123' } });
     fireEvent.click(screen.getByRole('button', { name: /create account/i }));
 
     await waitFor(() => {

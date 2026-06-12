@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { Bot, Code, FileUp, Menu, Settings, TestTube, User, ChevronDown, Sparkles, MonitorSmartphone } from 'lucide-react';
+import { Bot, Code, FileUp, Menu, Settings, TestTube, User, ChevronDown, Sparkles, MonitorSmartphone, Library } from 'lucide-react';
 import { useAuth } from '@/context/auth-context';
 import { Button, buttonVariants } from '@/components/ui/button';
 import {
@@ -36,6 +36,7 @@ const Header = () => {
     { href: "/qa-test-assistant/standalone-generator", label: "Standalone Generator", icon: Sparkles },
     { href: "/qa-test-assistant/playwright-generator", label: "Playwright Generator", icon: Bot },
     { href: "/qa-test-assistant/visual-tester", label: "Visual Tester", icon: MonitorSmartphone },
+    { href: "/qa-test-assistant/bug-library", label: "Bug Library", icon: Library },
     { href: "/qa-test-assistant/playwright-setup", label: "Playwright Setup", icon: Code },
     { href: "/qa-test-assistant/setup", label: "Jira Setup", icon: Settings },
   ];

@@ -19,7 +19,16 @@ jest.mock('@/app/actions', () => ({
   fetchProjectsAction: jest.fn(),
 }));
 
-const mockSetCredentials = jest.fn();
+jest.mock('lucide-react', () => ({
+  Eye: () => <span data-testid="icon-eye" />,
+  EyeOff: () => <span data-testid="icon-eye-off" />,
+  KeyRound: () => <span data-testid="icon-key" />,
+  AtSign: () => <span data-testid="icon-at" />,
+  LinkIcon: () => <span data-testid="icon-link" />,
+  Loader2: () => <span data-testid="icon-loader" />,
+}));
+
+const mockSetCredentials = jest.fn().mockResolvedValue(undefined);
 const mockLogout = jest.fn();
 const mockToast = jest.fn();
 
@@ -40,7 +49,7 @@ describe('AuthForm Component', () => {
     render(<AuthForm />);
     expect(screen.getByLabelText(/Jira URL/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/Jira Email Address/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/API Token/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^API Token$/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Connect/i })).toBeInTheDocument();
   });
 
@@ -59,7 +68,7 @@ describe('AuthForm Component', () => {
 
     fireEvent.change(screen.getByLabelText(/Jira URL/i), { target: { value: 'https://test.jira.com' } });
     fireEvent.change(screen.getByLabelText(/Jira Email Address/i), { target: { value: 'test@user.com' } });
-    fireEvent.change(screen.getByLabelText(/API Token/i), { target: { value: 'my-token' } });
+    fireEvent.change(screen.getByLabelText(/^API Token$/i), { target: { value: 'my-token' } });
     fireEvent.click(screen.getByRole('button', { name: /Connect/i }));
 
     await waitFor(() => {
@@ -90,7 +99,7 @@ describe('AuthForm Component', () => {
 
     fireEvent.change(screen.getByLabelText(/Jira URL/i), { target: { value: 'https://test.jira.com' } });
     fireEvent.change(screen.getByLabelText(/Jira Email Address/i), { target: { value: 'test@user.com' } });
-    fireEvent.change(screen.getByLabelText(/API Token/i), { target: { value: 'wrong-token' } });
+    fireEvent.change(screen.getByLabelText(/^API Token$/i), { target: { value: 'wrong-token' } });
     fireEvent.click(screen.getByRole('button', { name: /Connect/i }));
 
     await waitFor(() => {
@@ -111,7 +120,7 @@ describe('AuthForm Component', () => {
   
   it('toggles API token visibility', () => {
     render(<AuthForm />);
-    const passwordInput = screen.getByLabelText(/API Token/i);
+    const passwordInput = screen.getByLabelText(/^API Token$/i);
     const toggleButton = screen.getByLabelText(/Show API token/i);
 
     expect(passwordInput).toHaveAttribute('type', 'password');

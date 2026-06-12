@@ -21,7 +21,7 @@ import { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useLoader } from '@/context/loader-context';
-import { FirebaseError } from 'firebase/app';
+import { AuthError } from '@supabase/supabase-js';
 
 const formSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
@@ -29,7 +29,9 @@ const formSchema = z.object({
   password: z.string().min(6, { message: 'Password must be at least 6 characters.' }),
 });
 
-export default function SignupPage() {
+import { Suspense } from 'react';
+
+function SignupForm() {
   const { signup } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -61,22 +63,18 @@ export default function SignupPage() {
       let title = 'Signup Failed';
       let description = 'Something went wrong. Please try again.';
 
-      if (error instanceof FirebaseError) {
-        switch (error.code) {
-          case 'auth/email-already-in-use':
-            title = 'Email In Use';
-            description = 'This email address is already associated with an account. Please log in.';
-            break;
-          case 'auth/weak-password':
-            title = 'Weak Password';
-            description = 'The password should be at least 6 characters long.';
-            break;
-          case 'auth/invalid-email':
-            title = 'Invalid Email';
-            description = 'Please enter a valid email address.';
-            break;
-          default:
-            description = error.message;
+      if (error instanceof Error) {
+        if (error.message.includes('already registered')) {
+          title = 'Email In Use';
+          description = 'This email address is already associated with an account. Please log in.';
+        } else if (error.message.includes('Password should be at least')) {
+          title = 'Weak Password';
+          description = 'The password should be at least 6 characters long.';
+        } else if (error.message.includes('valid email')) {
+          title = 'Invalid Email';
+          description = 'Please enter a valid email address.';
+        } else {
+          description = error.message;
         }
       }
       
@@ -92,67 +90,75 @@ export default function SignupPage() {
   }
 
   return (
+    <Card className="w-full max-w-sm">
+      <CardHeader>
+        <CardTitle>Create Account</CardTitle>
+        <CardDescription>Enter your details to get started.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Name</FormLabel>
+                  <FormControl>
+                    <Input placeholder="Jane Doe" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="email"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Email</FormLabel>
+                  <FormControl>
+                    <Input type="email" placeholder="you@example.com" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="password"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Password</FormLabel>
+                  <FormControl>
+                    <Input type="password" placeholder="••••••••" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button type="button" className="w-full" disabled={isLoading} onClick={form.handleSubmit(onSubmit)}>
+              Create Account
+            </Button>
+          </form>
+        </Form>
+        <div className="mt-4 text-center text-sm">
+          Already have an account?{' '}
+          <Link href="/login" className="underline">
+            Login
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function SignupPage() {
+  return (
     <div className="flex justify-center items-center py-12">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>Create Account</CardTitle>
-          <CardDescription>Enter your details to get started.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input placeholder="Jane Doe" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" placeholder="you@example.com" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <Input type="password" placeholder="••••••••" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                Create Account
-              </Button>
-            </form>
-          </Form>
-          <div className="mt-4 text-center text-sm">
-            Already have an account?{' '}
-            <Link href="/login" className="underline">
-              Login
-            </Link>
-          </div>
-        </CardContent>
-      </Card>
+      <Suspense fallback={<div>Loading...</div>}>
+        <SignupForm />
+      </Suspense>
     </div>
   );
 }

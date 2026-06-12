@@ -21,6 +21,7 @@ import { useToast } from '@/hooks/use-toast';
 import { analyzeDocumentAction, createJiraTicketsAction } from '@/app/actions';
 import type { AnalyzeDocumentOutput, DraftTicketRecursive } from '@/lib/schemas';
 import { Badge } from '@/components/ui/badge';
+import { uploadDocument, getDocumentSignedUrl } from '@/lib/storage';
 
 interface DocumentTicketCreatorProps {
   projectId: string;
@@ -35,7 +36,6 @@ export function DocumentTicketCreator({ projectId, projectKey, projectName }: Do
   const { credentials } = useAuth();
   const { toast } = useToast();
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [fileDataUri, setFileDataUri] = useState<string | null>(null);
   const [userPersona, setUserPersona] = useState<string>('');
   const [outputFormatPreference, setOutputFormatPreference] = useState<string>('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -50,15 +50,9 @@ export function DocumentTicketCreator({ projectId, projectKey, projectName }: Do
       if (file.type !== 'application/pdf') {
         toast({ title: "Invalid File Type", description: "Please upload a PDF document.", variant: "destructive" });
         setSelectedFile(null);
-        setFileDataUri(null);
         return;
       }
       setSelectedFile(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setFileDataUri(e.target?.result as string);
-      };
-      reader.readAsDataURL(file);
       setDraftedTickets([]);
       setAnalysisError(null);
       setCreationError(null);
@@ -66,7 +60,7 @@ export function DocumentTicketCreator({ projectId, projectKey, projectName }: Do
   };
 
   const handleAnalyzeDocument = async () => {
-    if (!fileDataUri || !credentials) {
+    if (!selectedFile || !credentials) {
       toast({ title: "Missing Information", description: "Please select a PDF file and ensure you are connected to Jira.", variant: "destructive" });
       return;
     }
@@ -74,8 +68,14 @@ export function DocumentTicketCreator({ projectId, projectKey, projectName }: Do
     setAnalysisError(null);
     setDraftedTickets([]);
     try {
+      const { path, error: uploadError } = await uploadDocument(selectedFile);
+      if (uploadError || !path) throw new Error(uploadError?.message || "Failed to upload document to Supabase.");
+
+      const { signedUrl, error: signedUrlError } = await getDocumentSignedUrl(path);
+      if (signedUrlError || !signedUrl) throw new Error(signedUrlError?.message || "Failed to generate signed URL for document.");
+
       const result = await analyzeDocumentAction({
-        documentDataUri: fileDataUri,
+        documentUrl: signedUrl,
         projectKey,
         projectName,
         userPersona: userPersona || undefined,
@@ -171,7 +171,6 @@ export function DocumentTicketCreator({ projectId, projectKey, projectName }: Do
       if (result.success && !result.message.toLowerCase().includes("fail") && !result.message.toLowerCase().includes("partial")) {
         setDraftedTickets([]); 
         setSelectedFile(null);
-        setFileDataUri(null);
         setUserPersona('');
         setOutputFormatPreference('');
       }
@@ -299,7 +298,7 @@ export function DocumentTicketCreator({ projectId, projectKey, projectName }: Do
              <p className="text-xs text-muted-foreground mt-1">Example: "Detailed tasks for each feature", "Ensure sub-tasks are granular".</p>
           </div>
 
-          <Button onClick={handleAnalyzeDocument} disabled={!fileDataUri || isAnalyzing || isCreatingTickets} className="w-full sm:w-auto">
+          <Button onClick={handleAnalyzeDocument} disabled={!selectedFile || isAnalyzing || isCreatingTickets} className="w-full sm:w-auto">
             {isAnalyzing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Wand2 className="mr-2 h-4 w-4" />}
             {isAnalyzing ? 'Analyzing Document...' : 'Analyze & Draft Tickets'}
           </Button>

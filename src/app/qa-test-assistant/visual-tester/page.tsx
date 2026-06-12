@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Loader2, Play, MonitorSmartphone, CheckCircle, FileWarning, Palette, ScanText, Accessibility, LayoutTemplate, Lightbulb, Activity, Bug, ArrowRight, ShieldCheck, Zap, Terminal, Sparkles, Square
 } from "lucide-react";
+import { supabase } from '@/lib/supabase';
 import { cn } from "@/lib/utils";
 import type { VisualIssue } from "@/lib/schemas";
 
@@ -86,9 +87,16 @@ export default function VisualTesterPage() {
     setAbortController(controller);
 
     try {
+      // Get the Supabase session token to authenticate the API request
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
       const response = await fetch('/api/live-tester', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
         body: JSON.stringify({ url: data.url, instructions: data.instructions, testDepth: data.testDepth }),
         signal: controller.signal
       });

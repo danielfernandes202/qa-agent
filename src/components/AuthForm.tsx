@@ -53,7 +53,7 @@ export function AuthForm() {
       // Attempt to fetch projects to validate the credentials
       await fetchProjectsAction(data);
       // If successful, set the credentials in the AuthContext
-      setCredentials(data);
+      await setCredentials(data);
       toast({ 
         title: "Success", 
         description: "Successfully connected to Jira.",
@@ -62,7 +62,6 @@ export function AuthForm() {
       // The AuthProvider will update isAuthenticated, and UI should react (e.g., show main page)
     } catch (error: any) {
       // If fetchProjectsAction throws an error, it means authentication/connection failed
-      logout(); // Ensure any potentially partially set or invalid credentials are cleared
       console.error("Authentication error:", error.message);
       toast({
         title: "Connection Failed",

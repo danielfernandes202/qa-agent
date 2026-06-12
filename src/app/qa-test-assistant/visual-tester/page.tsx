@@ -91,7 +91,8 @@ export default function VisualTesterPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const response = await fetch('/api/live-tester', {
+      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:3001';
+      const response = await fetch(`${workerUrl}/api/live-tester`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',

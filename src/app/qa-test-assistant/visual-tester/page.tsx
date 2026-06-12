@@ -91,7 +91,10 @@ export default function VisualTesterPage() {
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
-      const workerUrl = process.env.NEXT_PUBLIC_WORKER_URL || 'http://localhost:3001';
+      // Bypass Vercel env var issues by hardcoding the production URL directly
+      const workerUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://qa-agent-production-a992.up.railway.app' 
+        : 'http://localhost:3001';
       const response = await fetch(`${workerUrl}/api/live-tester`, {
         method: 'POST',
         headers: { 

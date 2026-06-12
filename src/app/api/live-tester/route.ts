@@ -3,6 +3,7 @@ import { ai } from '@/ai/genkit';
 import { z } from 'zod';
 import { chromium, Page, Browser } from 'playwright';
 import { LiveTestingOutputSchema } from '@/lib/schemas';
+import { uploadVisualTestImage } from '@/lib/storage';
 
 // Maintain active Playwright pages for tool calls
 const activePages = new Map<string, Page>();
@@ -310,8 +311,88 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                         throw new Error("Agent failed to produce a valid report.");
                     }
                     
+                    // Create a scoped Supabase client with the user's token if available
+                    const authHeader = req.headers.get('Authorization');
+                    const { createClient } = await import('@supabase/supabase-js');
+                    const scopedSupabase = createClient(
+                        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                        { global: { headers: authHeader ? { Authorization: authHeader } : {} } }
+                    );
+
+                    // Upload final screenshot to Supabase Storage
+                    const finalScreenshotUri = await takeScreenshot();
+                    if (finalScreenshotUri) {
+                        logInternal("Uploading final screenshot to Supabase Storage...");
+                        const { publicUrl, error: uploadError } = await uploadVisualTestImage(finalScreenshotUri, undefined, scopedSupabase);
+                        if (publicUrl) {
+                             finalOutput.screenshotUrl = publicUrl;
+                             logInternal("Final screenshot uploaded successfully.");
+                        } else if (uploadError) {
+                             logInternal(`Failed to upload final screenshot: ${uploadError.message}`);
+                        }
+                    }
+                    
                     finalOutput.agentLogs = [...agentLogs, ...(finalOutput.agentLogs || [])];
                     if (testsPerformed.length > 0) finalOutput.testsPerformed = testsPerformed;
+                    
+                    // Save to Supabase and generate embeddings
+                    try {
+                        logInternal("Saving test run to Supabase...");
+                        const { data: runData, error: runError } = await scopedSupabase
+                            .from('test_runs')
+                            .insert([{ tests_performed: testsPerformed.length || 1 }])
+                            .select('id')
+                            .single();
+                            
+                        if (runError) {
+                            logInternal(`Failed to save test run: ${runError.message}`);
+                        } else if (runData && finalOutput.bugsIdentified && finalOutput.bugsIdentified.length > 0) {
+                            logInternal(`Generating embeddings for ${finalOutput.bugsIdentified.length} bugs...`);
+                            for (const bug of finalOutput.bugsIdentified) {
+                                try {
+                                    const embedResponse = await ai.embed({
+                                        embedder: 'googleai/gemini-embedding-2',
+                                        content: `${bug.title}: ${bug.description}`
+                                    });
+                                    // Handle genkit output type
+                                    let vector: number[] | null = null;
+                                    if (Array.isArray(embedResponse)) {
+                                        if (typeof embedResponse[0] === 'number') {
+                                            vector = embedResponse as number[];
+                                        } else if (embedResponse[0] && Array.isArray((embedResponse[0] as any).embedding)) {
+                                            vector = (embedResponse[0] as any).embedding;
+                                        }
+                                    } else if (embedResponse && Array.isArray((embedResponse as any).embedding)) {
+                                        vector = (embedResponse as any).embedding;
+                                    } else if (embedResponse && Array.isArray((embedResponse as any).values)) {
+                                        vector = (embedResponse as any).values;
+                                    }
+
+                                    if (!vector && Array.isArray(embedResponse)) vector = embedResponse as any; // Fallback
+
+                                    if (vector && Array.isArray(vector)) {
+                                        const { error: bugError } = await scopedSupabase
+                                        .from('visual_bugs')
+                                        .insert([{
+                                            test_run_id: runData.id,
+                                            description: `${bug.title}: ${bug.description}`,
+                                            severity: bug.severity,
+                                            screenshot_url: bug.screenshotUrl || finalOutput.screenshotUrl,
+                                            embedding: `[${vector.join(',')}]`
+                                        }]);
+                                    } else {
+                                        logInternal(`Warning: Could not parse vector for "${bug.title}".`);
+                                    }
+                                } catch (embErr: any) {
+                                    logInternal(`Failed to embed bug "${bug.title}": ${embErr.message}`);
+                                }
+                            }
+                            logInternal("Saved bugs to Supabase successfully.");
+                        }
+                    } catch (e: any) {
+                        logInternal(`Error logging to Supabase: ${e.message}`);
+                    }
                     
                     send('result', finalOutput);
 

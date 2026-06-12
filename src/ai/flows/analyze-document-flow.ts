@@ -23,7 +23,7 @@ const analyzeDocumentPrompt = ai.definePrompt({
   prompt: `You are an expert Jira project planner. Your task is to analyze the provided requirements document (PDF) for the project "{{projectName}}" (key: {{projectKey}}) and break it down into a structured hierarchy of Jira tickets: Epics, Stories, Tasks, Sub-tasks, and Bugs. The goal is to produce tickets that are ready for development with minimal further clarification.
 
 Document Content:
-{{media url=documentDataUri}}
+{{media url=documentUrl}}
 
 Project Context:
 - Project Name: {{projectName}}

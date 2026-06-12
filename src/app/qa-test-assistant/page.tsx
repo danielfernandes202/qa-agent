@@ -11,14 +11,14 @@ import { JiraTicketPreviewDialog } from '@/components/JiraTicketPreviewDialog';
 import type { JiraIssue } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LogOut, Info, Bug, FileUp, Search, TestTube } from 'lucide-react';
+import { LogOut, Info, Bug, FileUp, Search, TestTube, Library } from 'lucide-react';
 import Link from 'next/link';
 import { ProjectContext } from '@/contexts/ProjectContext';
 import { AuthForm } from '@/components/AuthForm';
 import { motion } from 'motion/react';
 
 export default function QATestAssistantPage() {
-  const { isAuthenticated, credentials, logout } = useAuth();
+  const { isAuthenticated, credentials, logout, setCredentials } = useAuth();
   const { 
     selectedProject, 
     searchTerm, 
@@ -130,6 +130,15 @@ export default function QATestAssistantPage() {
                 </Link>
               </Button>
               <Button 
+                variant="outline" 
+                asChild
+                className="transition-transform active:scale-[0.98] font-medium"
+              >
+                <Link href="/qa-test-assistant/bug-library">
+                  <Library className="mr-2 h-4 w-4" /> Bug Library
+                </Link>
+              </Button>
+              <Button 
                 onClick={openRaiseBugModal}
                 className="transition-transform active:scale-[0.98] font-medium shadow-sm"
               >
@@ -139,10 +148,10 @@ export default function QATestAssistantPage() {
           )}
           <Button 
             variant="ghost" 
-            onClick={logout}
+            onClick={() => setCredentials(null)}
             className="transition-transform active:scale-[0.98] text-muted-foreground hover:text-foreground"
           >
-            <LogOut className="mr-2 h-4 w-4" /> Disconnect
+            <LogOut className="mr-2 h-4 w-4" /> Disconnect Jira
           </Button>
         </div>
       </motion.div>

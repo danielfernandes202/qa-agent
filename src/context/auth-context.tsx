@@ -2,14 +2,7 @@
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { auth } from '@/lib/firebase';
-import { 
-  onAuthStateChanged, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  signOut,
-  updateProfile,
-} from 'firebase/auth';
+import { supabase } from '@/lib/supabase';
 
 interface User {
   uid: string;
@@ -30,7 +23,7 @@ interface AuthContextType {
   logout: () => void;
   isLoading: boolean;
   credentials: JiraCredentials | null;
-  setCredentials: (credentials: JiraCredentials | null) => void;
+  setCredentials: (credentials: JiraCredentials | null) => Promise<void>;
   isAuthenticated: boolean;
 }
 
@@ -43,50 +36,92 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isInitialized, setIsInitialized] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    // Load Jira credentials from localStorage on mount
+  const fetchJiraCredentials = async () => {
     try {
-      const storedCredentials = localStorage.getItem('jiraCredentials');
-      if (storedCredentials) {
-        setCredentialsState(JSON.parse(storedCredentials));
-      }
-    } catch (error) {
-      console.error("Failed to parse credentials from localStorage", error);
-      localStorage.removeItem('jiraCredentials');
-    }
-    setIsInitialized(true);
-  }, []);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser({
-            uid: firebaseUser.uid,
-            name: firebaseUser.displayName || firebaseUser.email || 'User',
-            email: firebaseUser.email!
+      const { data, error } = await supabase.rpc('get_jira_credentials');
+      if (error) {
+        console.error("Failed to fetch credentials from Supabase:", error);
+      } else if (data && data.length > 0) {
+        const record = data[0];
+        setCredentialsState({
+          jiraUrl: record.jira_url,
+          email: record.email,
+          apiToken: record.api_token,
         });
       } else {
-        setUser(null);
+        setCredentialsState(null);
+      }
+    } catch (err) {
+      console.error("Exception fetching credentials:", err);
+    } finally {
+      setIsInitialized(true);
+    }
+  };
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (session?.user) {
+          setUser({
+            uid: session.user.id,
+            name: session.user.user_metadata?.full_name || session.user.email || 'User',
+            email: session.user.email!
+          });
+          await fetchJiraCredentials();
+        } else {
+          setUser(null);
+          setCredentialsState(null);
+          setIsInitialized(true);
+        }
+        setIsLoading(false);
+      }
+    );
+
+    // Initial session fetch
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session?.user) {
+        setUser({
+          uid: session.user.id,
+          name: session.user.user_metadata?.full_name || session.user.email || 'User',
+          email: session.user.email!
+        });
+        await fetchJiraCredentials();
+      } else {
+        setIsInitialized(true);
       }
       setIsLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => subscription.unsubscribe();
   }, []);
   
-  const setCredentials = (newCredentials: JiraCredentials | null) => {
+  const setCredentials = async (newCredentials: JiraCredentials | null) => {
     setCredentialsState(newCredentials);
     if (newCredentials) {
-      localStorage.setItem('jiraCredentials', JSON.stringify(newCredentials));
+      const { error } = await supabase.rpc('store_jira_credentials', {
+        p_jira_url: newCredentials.jiraUrl,
+        p_email: newCredentials.email,
+        p_api_token: newCredentials.apiToken,
+      });
+      if (error) {
+        console.error("Failed to store credentials securely:", error);
+        throw new Error("Failed to securely store credentials in Supabase.");
+      }
     } else {
-      localStorage.removeItem('jiraCredentials');
+      if (user) {
+        const { error } = await supabase.from('user_jira_credentials').delete().eq('user_id', user.uid);
+        if (error) {
+          console.error("Failed to delete credentials from Supabase:", error);
+        }
+      }
     }
   };
 
   const login = async (email: string, pass: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, pass);
+      const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
       return true;
     } catch (error) {
       console.error("Login error:", error);
@@ -99,11 +134,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signup = async (name: string, email: string, pass: string): Promise<void> => {
     setIsLoading(true);
     try {
-      const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
-      const firebaseUser = userCredential.user;
-      await updateProfile(firebaseUser, { displayName: name });
+      const { data, error } = await supabase.auth.signUp({ 
+        email, 
+        password: pass,
+        options: {
+          data: {
+            full_name: name
+          }
+        }
+      });
+      if (error) throw error;
       
-      setUser({ uid: firebaseUser.uid, name, email });
+      if (data.user) {
+        setUser({ uid: data.user.id, name, email });
+      }
     } catch (error) {
       console.error("Signup error:", error);
       throw error;
@@ -113,7 +157,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = async () => {
-    await signOut(auth);
+    await supabase.auth.signOut();
     setUser(null);
     setCredentials(null); // Clear Jira credentials on logout as well
     router.push('/');

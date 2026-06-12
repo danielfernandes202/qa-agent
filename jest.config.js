@@ -10,6 +10,7 @@ const customJestConfig = {
   preset: 'ts-jest',
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
+    '^uuid$': require.resolve('uuid'),
   },
 };
 

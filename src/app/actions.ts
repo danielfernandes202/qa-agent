@@ -196,6 +196,7 @@ export async function fetchProjectsAction(credentials: JiraCredentials): Promise
         'Authorization': authHeader,
         'Accept': 'application/json',
       },
+      cache: 'no-store',
     });
 
     if (!response.ok) {
@@ -306,6 +307,7 @@ export async function fetchIssuesAction(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(bodyData),
+      cache: 'no-store',
     });
 
     if (!response.ok) {

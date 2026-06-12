@@ -101,7 +101,7 @@ export type DraftTicketRecursive = {
 
 
 export const AnalyzeDocumentInputSchema = z.object({
-  documentDataUri: z.string().describe("The PDF document content as a Base64-encoded data URI."),
+  documentUrl: z.string().describe("The PDF document URL (can be a signed Supabase URL)."),
   projectKey: z.string(),
   projectName: z.string(),
   userPersona: z.string().optional().describe("An optional hint about the target user persona to guide ticket creation."),
@@ -170,6 +170,7 @@ export const LiveTestingOutputSchema = z.object({
   testsPerformed: z.array(z.string()).describe("A list of actions or tests the agent performed."),
   bugsIdentified: z.array(VisualIssueSchema).describe("A list of visual or functional bugs identified during the test."),
   agentLogs: z.array(z.string()).describe("Internal logs from the agent explaining its reasoning and actions."),
+  screenshotUrl: z.string().optional().describe("The URL of the final screenshot taken at the end of the test."),
 });
 export type LiveTestingOutput = z.infer<typeof LiveTestingOutputSchema>;
 

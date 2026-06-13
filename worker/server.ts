@@ -36,19 +36,22 @@ async function generateWithFallback(options: any, logInternal: (msg: string) => 
         logInternal("Using primary model: gemini-3.1-flash-lite");
         return res1;
     } catch (e: any) {
-        logInternal(`Primary model failed (${e.status || e.message}), falling back to secondary: gemma-4-31b-it`);
+        const errDetails = e.detail ? JSON.stringify(e.detail) : e.message;
+        logInternal(`Primary model failed (${e.status || 'UNKNOWN'} - ${errDetails}), falling back to secondary: gemma-4-31b-it`);
         try {
             const res2 = await ai.generate({ ...options, model: 'googleai/gemma-4-31b-it' });
             logInternal("Using secondary model: gemma-4-31b-it");
             return res2;
         } catch (e2: any) {
-            logInternal(`Secondary model failed (${e2.status || e2.message}), falling back to tertiary: gemma-4-26b-a4b-it`);
+            const errDetails2 = e2.detail ? JSON.stringify(e2.detail) : e2.message;
+            logInternal(`Secondary model failed (${e2.status || 'UNKNOWN'} - ${errDetails2}), falling back to tertiary: gemma-4-26b-a4b-it`);
             try {
                 const res3 = await ai.generate({ ...options, model: 'googleai/gemma-4-26b-a4b-it' });
                 logInternal("Using tertiary model: gemma-4-26b-a4b-it");
                 return res3;
-            } catch (e3) {
-                logInternal("All models failed.");
+            } catch (e3: any) {
+                const errDetails3 = e3.detail ? JSON.stringify(e3.detail) : e3.message;
+                logInternal(`Tertiary model failed (${e3.status || 'UNKNOWN'} - ${errDetails3}). All models failed.`);
                 throw new Error("All AI models failed during generation.");
             }
         }
@@ -95,7 +98,15 @@ app.post('/api/live-tester', async (req, res) => {
         (async () => {
             try {
                 send('log', `Starting headless browser session...`);
-                browser = await chromium.launch({ headless: true });
+                browser = await chromium.launch({
+                    headless: true,
+                    args: [
+                        '--no-sandbox',
+                        '--disable-setuid-sandbox',
+                        '--disable-dev-shm-usage',
+                        '--disable-gpu'
+                    ]
+                });
                 page = await browser.newPage({
                     viewport: { width: 1920, height: 1080 }
                 });

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import crypto from 'crypto';
 
 export const VisualIssueSchema = z.object({
@@ -33,23 +33,28 @@ export async function uploadVisualTestImage(base64Data: string, supabaseUrl: str
     const ext = mimeType.split('/')[1] || 'jpeg';
     const path = `${crypto.randomUUID()}.${ext}`;
 
-    const headers: Record<string, string> = {
-      'Content-Type': mimeType,
-      'Authorization': token ? `Bearer ${token}` : `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
-    };
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        global: {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        },
+      }
+    );
 
-    const res = await fetch(`${supabaseUrl}/storage/v1/object/qa-visual-tests/${path}`, {
-      method: 'POST',
-      headers,
-      body: buffer
-    });
+    const { data, error: uploadError } = await supabase.storage
+      .from('qa-visual-tests')
+      .upload(path, buffer, {
+        contentType: mimeType,
+      });
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`StorageApiError: ${res.status} ${errText}`);
+    if (uploadError) {
+      throw new Error(`StorageApiError: ${uploadError.message}`);
     }
 
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/qa-visual-tests/${path}`;
+    const { data: publicUrlData } = supabase.storage.from('qa-visual-tests').getPublicUrl(path);
+    const publicUrl = publicUrlData.publicUrl;
     return { publicUrl, error: null };
   } catch (error: any) {
     console.error('Error uploading visual test image to Supabase:', error);

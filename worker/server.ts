@@ -121,12 +121,12 @@ app.post('/api/live-tester', async (req, res) => {
 
                 const takeScreenshot = async () => {
                     try {
-                        const buffer = await page!.screenshot({ type: 'jpeg', quality: 60 });
+                        const buffer = await page!.screenshot({ type: 'jpeg', quality: 60, timeout: 10000 });
                         const uri = `data:image/jpeg;base64,${buffer.toString('base64')}`;
                         send('screenshot', uri);
                         return uri;
-                    } catch (e) {
-                        console.error("Screenshot failed", e);
+                    } catch (e: any) {
+                        console.error("Screenshot failed", e.message || e);
                         return null;
                     }
                 };
@@ -191,26 +191,31 @@ app.post('/api/live-tester', async (req, res) => {
                     outputSchema: z.string() as any,
                 }, async () => {
                     logInternal(`Tool Action: Extracting page info & DOM structure`);
-                    const currentUrl = page!.url();
-                    const title = await page!.title();
-                    const simplifiedDOM = await page!.evaluate(() => {
-                        const elements = document.querySelectorAll('button, a, input, select, textarea, [role="button"]');
-                        let info = '';
-                        elements.forEach((el, index) => {
-                            if (index > 100) return;
-                            const tag = el.tagName.toLowerCase();
-                            const id = el.id ? `#${el.id}` : '';
-                            const className = el.className && typeof el.className === 'string' ? `.${el.className.split(' ').join('.')}` : '';
-                            const type = el.getAttribute('type') ? `[type="${el.getAttribute('type')}"]` : '';
-                            const name = el.getAttribute('name') ? `[name="${el.getAttribute('name')}"]` : '';
-                            const placeholder = el.getAttribute('placeholder') ? `[placeholder="${el.getAttribute('placeholder')}"]` : '';
-                            const ariaLabel = el.getAttribute('aria-label') ? `[aria-label="${el.getAttribute('aria-label')}"]` : '';
-                            const text = (el as HTMLElement).innerText?.trim().substring(0, 30) || (el as HTMLInputElement).value || '';
-                            info += `${tag}${id}${className}${type}${name}${placeholder}${ariaLabel} - Text: "${text}"\n`;
+                    try {
+                        const currentUrl = page!.url();
+                        const title = await page!.title();
+                        const simplifiedDOM = await page!.evaluate(() => {
+                            const elements = document.querySelectorAll('button, a, input, select, textarea, [role="button"]');
+                            let info = '';
+                            elements.forEach((el, index) => {
+                                if (index > 100) return;
+                                const tag = el.tagName.toLowerCase();
+                                const id = el.id ? `#${el.id}` : '';
+                                const className = el.className && typeof el.className === 'string' ? `.${el.className.split(' ').join('.')}` : '';
+                                const type = el.getAttribute('type') ? `[type="${el.getAttribute('type')}"]` : '';
+                                const name = el.getAttribute('name') ? `[name="${el.getAttribute('name')}"]` : '';
+                                const placeholder = el.getAttribute('placeholder') ? `[placeholder="${el.getAttribute('placeholder')}"]` : '';
+                                const ariaLabel = el.getAttribute('aria-label') ? `[aria-label="${el.getAttribute('aria-label')}"]` : '';
+                                const text = (el as HTMLElement).innerText?.trim().substring(0, 30) || (el as HTMLInputElement).value || '';
+                                info += `${tag}${id}${className}${type}${name}${placeholder}${ariaLabel} - Text: "${text}"\n`;
+                            });
+                            return info || 'No interactive elements found.';
                         });
-                        return info || 'No interactive elements found.';
-                    });
-                    return `URL: ${currentUrl}\nTitle: ${title}\nInteractive Elements:\n${simplifiedDOM}`;
+                        return `URL: ${currentUrl}\nTitle: ${title}\nInteractive Elements:\n${simplifiedDOM}`;
+                    } catch (e: any) {
+                        logInternal(`DOM extraction failed: ${e.message}`);
+                        return `Failed to extract DOM. The page may have crashed. Error: ${e.message}`;
+                    }
                 });
 
                 let chatHistory: any[] = [{
@@ -443,6 +448,10 @@ const PORT = process.env.PORT || 3001;
 const server = app.listen(PORT, () => {
     console.log(`Live Tester Worker running on port ${PORT}`);
 });
+
+// Increase timeouts to prevent EPIPE when taking slow screenshots
+server.setTimeout(300000);
+server.keepAliveTimeout = 300000;
 
 // Keep process alive if express/node somehow unrefs the server
 setInterval(() => {}, 1000 * 60 * 60);

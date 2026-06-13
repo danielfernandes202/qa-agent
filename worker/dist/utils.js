@@ -22,7 +22,7 @@ exports.LiveTestingOutputSchema = zod_1.z.object({
     agentLogs: zod_1.z.array(zod_1.z.string()).describe("Internal logs from the agent explaining its reasoning and actions."),
     screenshotUrl: zod_1.z.string().optional().describe("The URL of the final screenshot taken at the end of the test."),
 });
-async function uploadVisualTestImage(base64Data, client) {
+async function uploadVisualTestImage(base64Data, supabaseUrl, token) {
     try {
         // Convert base64 to Buffer
         const base64Parts = base64Data.split(',');
@@ -32,15 +32,21 @@ async function uploadVisualTestImage(base64Data, client) {
         const buffer = Buffer.from(base64String, 'base64');
         const ext = mimeType.split('/')[1] || 'jpeg';
         const path = `${crypto_1.default.randomUUID()}.${ext}`;
-        const { data, error } = await client.storage
-            .from('qa-visual-tests')
-            .upload(path, buffer, { contentType: mimeType });
-        if (error)
-            throw error;
-        const { data: publicUrlData } = client.storage
-            .from('qa-visual-tests')
-            .getPublicUrl(data.path);
-        return { publicUrl: publicUrlData.publicUrl, error: null };
+        const headers = {
+            'Content-Type': mimeType,
+            'Authorization': token ? `Bearer ${token}` : `Bearer ${process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY}`,
+        };
+        const res = await fetch(`${supabaseUrl}/storage/v1/object/qa-visual-tests/${path}`, {
+            method: 'POST',
+            headers,
+            body: buffer
+        });
+        if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(`StorageApiError: ${res.status} ${errText}`);
+        }
+        const publicUrl = `${supabaseUrl}/storage/v1/object/public/qa-visual-tests/${path}`;
+        return { publicUrl, error: null };
     }
     catch (error) {
         console.error('Error uploading visual test image to Supabase:', error);

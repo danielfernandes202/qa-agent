@@ -45,14 +45,19 @@ const google_genai_1 = require("@genkit-ai/google-genai");
 const utils_1 = require("./utils");
 const dotenv = __importStar(require("dotenv"));
 const path_1 = __importDefault(require("path"));
-// Load .env from parent directory since the worker is inside /worker
-dotenv.config({ path: path_1.default.join(__dirname, '../.env') });
+// Only load dotenv if we're not in production (e.g. local dev)
+if (process.env.NODE_ENV !== 'production') {
+    dotenv.config({ path: path_1.default.join(__dirname, '../.env') });
+}
 const ai = (0, genkit_1.genkit)({
     plugins: [(0, google_genai_1.googleAI)()],
     model: 'googleai/gemini-3.1-flash-lite',
 });
 const app = (0, express_1.default)();
-app.use((0, cors_1.default)());
+const allowedOrigins = process.env.FRONTEND_URL
+    ? [process.env.FRONTEND_URL, 'http://localhost:3000', 'http://localhost:3002']
+    : ['http://localhost:3000', 'http://localhost:3002'];
+app.use((0, cors_1.default)({ origin: allowedOrigins }));
 app.use(express_1.default.json());
 const activePages = new Map();
 const activeStreams = new Map();
@@ -63,21 +68,24 @@ async function generateWithFallback(options, logInternal) {
         return res1;
     }
     catch (e) {
-        logInternal(`Primary model failed (${e.status || e.message}), falling back to secondary: gemma-4-31b-it`);
+        const errDetails = e.detail ? JSON.stringify(e.detail) : e.message;
+        logInternal(`Primary model failed (${e.status || 'UNKNOWN'} - ${errDetails}), falling back to secondary: gemma-4-31b-it`);
         try {
             const res2 = await ai.generate({ ...options, model: 'googleai/gemma-4-31b-it' });
             logInternal("Using secondary model: gemma-4-31b-it");
             return res2;
         }
         catch (e2) {
-            logInternal(`Secondary model failed (${e2.status || e2.message}), falling back to tertiary: gemma-4-26b-a4b-it`);
+            const errDetails2 = e2.detail ? JSON.stringify(e2.detail) : e2.message;
+            logInternal(`Secondary model failed (${e2.status || 'UNKNOWN'} - ${errDetails2}), falling back to tertiary: gemma-4-26b-a4b-it`);
             try {
                 const res3 = await ai.generate({ ...options, model: 'googleai/gemma-4-26b-a4b-it' });
                 logInternal("Using tertiary model: gemma-4-26b-a4b-it");
                 return res3;
             }
             catch (e3) {
-                logInternal("All models failed.");
+                const errDetails3 = e3.detail ? JSON.stringify(e3.detail) : e3.message;
+                logInternal(`Tertiary model failed (${e3.status || 'UNKNOWN'} - ${errDetails3}). All models failed.`);
                 throw new Error("All AI models failed during generation.");
             }
         }
@@ -240,12 +248,13 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                     }];
                 let actionCount = 0;
                 let finalOutput = null;
+                let isClientDisconnected = false;
                 req.on('close', () => {
+                    isClientDisconnected = true;
                     logInternal("Client disconnected, aborting test...");
-                    // Node handles aborted requests differently, we just close the browser and let it exit naturally
                 });
                 while (actionCount < maxActions) {
-                    if (req.closed)
+                    if (isClientDisconnected)
                         break;
                     actionCount++;
                     logInternal(`Starting AI Turn ${actionCount}...`);
@@ -335,7 +344,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                         chatHistory.push({ role: 'user', content: [{ text: "Please continue your analysis or output the final JSON report." }] });
                     }
                 }
-                if (!finalOutput && !req.closed) {
+                if (!finalOutput && !isClientDisconnected) {
                     logInternal("Requesting final JSON summary from LLM...");
                     const finalResponse = await generateWithFallback({
                         messages: [...chatHistory, { role: 'user', content: [{ text: "Please provide the final JSON report now." }] }],
@@ -343,10 +352,10 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                     }, logInternal);
                     finalOutput = finalResponse.output;
                 }
-                if (!finalOutput && !req.closed) {
+                if (!finalOutput && !isClientDisconnected) {
                     throw new Error("Agent failed to produce a valid report.");
                 }
-                if (req.closed)
+                if (isClientDisconnected)
                     return;
                 const authHeader = req.headers['authorization'];
                 const { createClient } = await import('@supabase/supabase-js');
@@ -354,7 +363,8 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                 const finalScreenshotUri = await takeScreenshot();
                 if (finalScreenshotUri) {
                     logInternal("Uploading final screenshot to Supabase Storage...");
-                    const { publicUrl, error: uploadError } = await (0, utils_1.uploadVisualTestImage)(finalScreenshotUri, scopedSupabase);
+                    const token = authHeader ? authHeader.replace('Bearer ', '').trim() : null;
+                    const { publicUrl, error: uploadError } = await (0, utils_1.uploadVisualTestImage)(finalScreenshotUri, process.env.NEXT_PUBLIC_SUPABASE_URL, token);
                     if (publicUrl) {
                         finalOutput.screenshotUrl = publicUrl;
                         logInternal("Final screenshot uploaded successfully.");
@@ -439,6 +449,8 @@ When you are ready to finish, stop calling tools and just return the final JSON 
     }
 });
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Live Tester Worker running on port ${PORT}`);
 });
+// Keep process alive if express/node somehow unrefs the server
+setInterval(() => { }, 1000 * 60 * 60);

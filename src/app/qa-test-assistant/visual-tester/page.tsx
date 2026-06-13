@@ -114,31 +114,41 @@ export default function VisualTesterPage() {
       const decoder = new TextDecoder();
       let done = false;
       let serverError: string | null = null;
+      let buffer = '';
 
       while (reader && !done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         if (value) {
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const parsed = JSON.parse(line.substring(6));
-                if (parsed.type === 'log') {
-                  setAgentLogs(prev => [...prev, parsed.data]);
-                } else if (parsed.type === 'screenshot') {
-                  setScreenshotData(parsed.data);
-                } else if (parsed.type === 'result') {
-                  setVisualIssues(parsed.data.bugsIdentified || []);
-                  setTestsPerformed(parsed.data.testsPerformed || []);
-                } else if (parsed.type === 'error') {
-                  serverError = parsed.data;
+          buffer += decoder.decode(value, { stream: true });
+          
+          let boundary = buffer.indexOf('\n\n');
+          while (boundary !== -1) {
+            const message = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            
+            const lines = message.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const parsed = JSON.parse(line.substring(6));
+                  if (parsed.type === 'log') {
+                    setAgentLogs(prev => [...prev, parsed.data]);
+                  } else if (parsed.type === 'screenshot') {
+                    setScreenshotData(parsed.data);
+                  } else if (parsed.type === 'result') {
+                    setVisualIssues(parsed.data.bugsIdentified || []);
+                    setTestsPerformed(parsed.data.testsPerformed || []);
+                    if (parsed.data.screenshotUrl) setScreenshotData(parsed.data.screenshotUrl);
+                  } else if (parsed.type === 'error') {
+                    serverError = parsed.data;
+                  }
+                } catch (e) {
+                  console.error("Failed to parse SSE JSON chunk:", e);
                 }
-              } catch (e) {
-                // Ignore partial chunks
               }
             }
+            boundary = buffer.indexOf('\n\n');
           }
         }
         if (serverError) throw new Error(serverError);

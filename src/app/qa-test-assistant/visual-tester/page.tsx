@@ -54,9 +54,10 @@ export default function VisualTesterPage() {
   const [analyzedUrl, setAnalyzedUrl] = useState<string | null>(null);
   const [screenshotData, setScreenshotData] = useState<string | null>(null);
   const [hasStarted, setHasStarted] = useState(false);
-  const [abortController, setAbortController] = useState<AbortController | null>(null);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   
   const logsEndRef = useRef<HTMLDivElement>(null);
+  const channelRef = useRef<any>(null);
 
   const form = useForm<CrawlFormValues>({
     resolver: zodResolver(crawlSchema),
@@ -73,6 +74,37 @@ export default function VisualTesterPage() {
     }
   }, [agentLogs]);
 
+  const cleanupRealtime = () => {
+    if (channelRef.current) {
+      supabase.removeChannel(channelRef.current);
+      channelRef.current = null;
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      cleanupRealtime();
+    };
+  }, []);
+
+  const processEvent = (type: string, data: any) => {
+    if (type === 'log') {
+      setAgentLogs(prev => [...prev, data]);
+    } else if (type === 'screenshot') {
+      setScreenshotData(data);
+    } else if (type === 'result') {
+      setVisualIssues(data.bugsIdentified || []);
+      setTestsPerformed(data.testsPerformed || []);
+      if (data.screenshotUrl) setScreenshotData(data.screenshotUrl);
+      setIsLoading(false);
+      cleanupRealtime();
+    } else if (type === 'error') {
+      setError(data);
+      setIsLoading(false);
+      cleanupRealtime();
+    }
+  };
+
   const handleAnalysis = async (data: CrawlFormValues) => {
     setIsLoading(true);
     setHasStarted(true);
@@ -82,9 +114,9 @@ export default function VisualTesterPage() {
     setAgentLogs([]);
     setAnalyzedUrl(data.url);
     setScreenshotData(null);
-
-    const controller = new AbortController();
-    setAbortController(controller);
+    setActiveSessionId(null);
+    
+    cleanupRealtime();
 
     try {
       // Get the Supabase session token to authenticate the API request
@@ -102,7 +134,6 @@ export default function VisualTesterPage() {
           ...(token ? { 'Authorization': `Bearer ${token}` } : {})
         },
         body: JSON.stringify({ url: data.url, instructions: data.instructions, testDepth: data.testDepth }),
-        signal: controller.signal
       });
 
       if (!response.ok) {
@@ -110,68 +141,62 @@ export default function VisualTesterPage() {
         throw new Error(errData.error || `Server returned ${response.status}`);
       }
 
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      let serverError: string | null = null;
-      let buffer = '';
+      const { sessionId } = await response.json();
+      setActiveSessionId(sessionId);
 
-      while (reader && !done) {
-        const { value, done: readerDone } = await reader.read();
-        done = readerDone;
-        if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          
-          let boundary = buffer.indexOf('\n\n');
-          while (boundary !== -1) {
-            const message = buffer.slice(0, boundary);
-            buffer = buffer.slice(boundary + 2);
-            
-            const lines = message.split('\n');
-            for (const line of lines) {
-              if (line.startsWith('data: ')) {
-                try {
-                  const parsed = JSON.parse(line.substring(6));
-                  if (parsed.type === 'log') {
-                    setAgentLogs(prev => [...prev, parsed.data]);
-                  } else if (parsed.type === 'screenshot') {
-                    setScreenshotData(parsed.data);
-                  } else if (parsed.type === 'result') {
-                    setVisualIssues(parsed.data.bugsIdentified || []);
-                    setTestsPerformed(parsed.data.testsPerformed || []);
-                    if (parsed.data.screenshotUrl) setScreenshotData(parsed.data.screenshotUrl);
-                  } else if (parsed.type === 'error') {
-                    serverError = parsed.data;
-                  }
-                } catch (e) {
-                  console.error("Failed to parse SSE JSON chunk:", e);
-                }
-              }
-            }
-            boundary = buffer.indexOf('\n\n');
-          }
+      // Fetch any past logs that might have been instantly inserted
+      const { data: pastEvents } = await supabase
+        .from('test_run_events')
+        .select('*')
+        .eq('session_id', sessionId)
+        .order('created_at', { ascending: true });
+
+      if (pastEvents) {
+        for (const evt of pastEvents) {
+          processEvent(evt.type, evt.data);
         }
-        if (serverError) throw new Error(serverError);
       }
+
+      // Subscribe to Realtime inserts for this session
+      const channel = supabase.channel(`test-run-${sessionId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'test_run_events', filter: `session_id=eq.${sessionId}` },
+          (payload) => {
+            const { type, data } = payload.new;
+            processEvent(type, data);
+          }
+        )
+        .subscribe();
+
+      channelRef.current = channel;
+
     } catch (err: any) {
-      if (err.name === 'AbortError') {
-        console.log('Analysis aborted by user.');
-      } else {
-        console.error("Live testing failed:", err);
-        setError(err.message || "An unknown error occurred during the analysis.");
-      }
-    } finally {
+      console.error("Live testing failed:", err);
+      setError(err.message || "An unknown error occurred during the analysis.");
       setIsLoading(false);
-      setAbortController(null);
+      cleanupRealtime();
     }
   };
 
-  const handleStop = () => {
-    if (abortController) {
-      abortController.abort();
-      setAbortController(null);
+  const handleStop = async () => {
+    if (activeSessionId) {
+      const workerUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://qa-agent-production-a992.up.railway.app' 
+        : 'http://localhost:3001';
+      
+      try {
+        await fetch(`${workerUrl}/api/live-tester/${activeSessionId}`, {
+          method: 'DELETE'
+        });
+      } catch (err) {
+        console.error("Failed to stop session cleanly", err);
+      }
+      
+      setActiveSessionId(null);
       setIsLoading(false);
       setAgentLogs(prev => [...prev, "Execution stopped by user."]);
+      cleanupRealtime();
     }
   };
 

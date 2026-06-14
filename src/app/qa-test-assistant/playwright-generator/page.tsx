@@ -11,18 +11,21 @@ import { Input } from '@/components/ui/input';
 import { ProjectSelector } from '@/components/ProjectSelector';
 import { IssueTable } from '@/components/IssueTable';
 import { generateTestCasesAction, generatePlaywrightCodeAction, type JiraIssue, attachTestCasesToJiraAction, convertTestCasesToExcel } from '@/app/actions';
-import { Bot, Info, Loader2, AlertCircle, Wand2, Clipboard, Check, Table as TableIcon, Code, Search, FileSpreadsheet, Download } from 'lucide-react';
+import { Bot, Info, Loader2, AlertCircle, Wand2, Clipboard, Check, Table as TableIcon, Code, Search, FileSpreadsheet, Download, Save } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { supabase } from '@/lib/supabase';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/cjs/styles/prism';
 import Link from 'next/link';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { JiraTicketPreviewDialog } from '@/components/JiraTicketPreviewDialog';
 import { ProjectContext } from '@/contexts/ProjectContext';
 
 export default function PlaywrightGeneratorPage() {
-  const { isAuthenticated, credentials } = useAuth();
+  const { isAuthenticated, credentials, user, activeWorkspace } = useAuth();
   const { toast } = useToast();
   const { 
     selectedProject, 
@@ -41,6 +44,9 @@ export default function PlaywrightGeneratorPage() {
   const [isTicketPreviewOpen, setIsTicketPreviewOpen] = useState(false);
   const [isAttaching, setIsAttaching] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [saveScriptName, setSaveScriptName] = useState("");
   const artifactsRef = useRef<HTMLDivElement>(null);
 
   const [isClient, setIsClient] = useState(false);
@@ -53,18 +59,38 @@ export default function PlaywrightGeneratorPage() {
     setError(null);
   }
 
-  const handleGenerateCodeClick = (issue: JiraIssue) => {
-    let playwrightSetup: PlaywrightSetup | null = null;
-    try {
-      const savedSetup = localStorage.getItem(`playwrightSetup_${issue.project.id}`);
-      if (savedSetup) {
-        playwrightSetup = PlaywrightSetupSchema.parse(JSON.parse(savedSetup));
-      }
-    } catch {
-      playwrightSetup = null;
+  const handleGenerateCodeClick = async (issue: JiraIssue, forceRegenerate = false) => {
+    if (!activeWorkspace) {
+      toast({
+        title: "Workspace Required",
+        description: "Please select a workspace before generating code.",
+        variant: "destructive",
+      });
+      return;
     }
 
-    if (!playwrightSetup) {
+    let playwrightSetup: PlaywrightSetup | null = null;
+    try {
+      const { data, error } = await supabase
+        .from('playwright_setups')
+        .select('*')
+        .eq('workspace_id', activeWorkspace.id)
+        .eq('project_id', issue.project.id)
+        .single();
+        
+      if (data && !error) {
+        playwrightSetup = {
+          baseUrl: data.base_url || '',
+          authFlow: data.auth_flow || '',
+          commonSelectors: data.common_selectors || '',
+          boilerplate: data.boilerplate || ''
+        };
+      }
+    } catch (e) {
+      console.error("Failed to load Playwright setup from Supabase", e);
+    }
+
+    if (!playwrightSetup || !playwrightSetup.baseUrl) {
       toast({
         title: "Playwright Setup Required",
         description: "Please configure the Playwright settings for this project before generating code.",
@@ -77,40 +103,64 @@ export default function PlaywrightGeneratorPage() {
     setSelectedIssue(issue);
     setIsGenerating(true);
 
-    generateTestCasesAction({
-      description: issue.description || '',
-      acceptanceCriteria: issue.acceptanceCriteria || '',
-      projectKey: issue.project.key,
-      coverageLevel: 'Max',
-    })
-    .then(testCases => {
+    try {
+      if (!forceRegenerate && user && activeWorkspace) {
+        const { data, error } = await supabase
+          .from('saved_scripts')
+          .select('code, test_cases')
+          .eq('workspace_id', activeWorkspace.id)
+          .eq('jira_issue_key', issue.key)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data && !error) {
+          setGeneratedCode(data.code);
+          setGeneratedTestCases(data.test_cases);
+          toast({
+            title: "Loaded from Library",
+            description: "An existing script for this issue was found and loaded instantly.",
+          });
+          setTimeout(() => {
+            artifactsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }, 100);
+          setIsGenerating(false);
+          return;
+        }
+      }
+
+      const testCases = await generateTestCasesAction({
+        description: issue.description || '',
+        acceptanceCriteria: issue.acceptanceCriteria || '',
+        projectKey: issue.project.key,
+        coverageLevel: 'Max',
+      });
+
       setGeneratedTestCases(testCases);
       if (testCases.length === 0) {
         throw new Error("No test cases could be generated from the issue. Cannot proceed to code generation.");
       }
-      return generatePlaywrightCodeAction({
+
+      const codeResult = await generatePlaywrightCodeAction({
         testCases,
-        playwrightSetup: playwrightSetup!,
+        playwrightSetup: playwrightSetup,
         projectName: issue.project.name,
       });
-    })
-    .then(codeResult => {
+
       setGeneratedCode(codeResult.playwrightCode);
       setTimeout(() => {
         artifactsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 100);
-    })
-    .catch(err => {
+    } catch (err: any) {
       setError(err.message || "An unexpected error occurred during generation.");
       toast({
         title: 'Generation Failed',
         description: err.message,
         variant: 'destructive',
       });
-    })
-    .finally(() => {
+    } finally {
       setIsGenerating(false);
-    });
+    }
   };
 
   const copyToClipboard = () => {
@@ -200,6 +250,53 @@ export default function PlaywrightGeneratorPage() {
     }
   };
 
+  const handleSaveToLibraryClick = () => {
+    let defaultName = "Generated Playwright Script";
+    if (selectedIssue?.key) {
+      defaultName = `Test for ${selectedIssue.key}`;
+    }
+    setSaveScriptName(defaultName);
+    setIsSaveDialogOpen(true);
+  };
+
+  const confirmSaveToLibrary = async () => {
+    if (!generatedCode || !user || !saveScriptName.trim()) return;
+    if (!activeWorkspace) {
+      toast({ title: "Error", description: "No active workspace selected.", variant: "destructive" });
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) throw new Error("Not authenticated with Supabase");
+
+      const { error } = await supabase.from('saved_scripts').insert([{
+        user_id: authData.user.id,
+        workspace_id: activeWorkspace.id,
+        name: saveScriptName.trim(),
+        jira_issue_key: selectedIssue?.key || null,
+        code: generatedCode,
+        test_cases: generatedTestCases
+      }]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Saved to Library",
+        description: "Your script has been saved to the Code Library.",
+      });
+      setIsSaveDialogOpen(false);
+    } catch (err: any) {
+      toast({
+        title: "Failed to save",
+        description: err.message || "An unexpected error occurred while saving.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
 
   if (!isClient) return null;
 
@@ -282,8 +379,18 @@ export default function PlaywrightGeneratorPage() {
         {!isGenerating && (generatedTestCases || generatedCode) && (
             <Card className="mt-8" ref={artifactsRef}>
                 <CardHeader>
-                    <CardTitle className="text-2xl">
-                        Generated Artifacts for {selectedIssue?.key}: <span className="text-muted-foreground font-normal text-xl">{selectedIssue?.summary}</span>
+                    <CardTitle className="text-2xl flex justify-between items-center">
+                        <div>
+                            Generated Artifacts for {selectedIssue?.key}: <span className="text-muted-foreground font-normal text-xl">{selectedIssue?.summary}</span>
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            onClick={() => selectedIssue && handleGenerateCodeClick(selectedIssue, true)}
+                            disabled={isGenerating}
+                        >
+                            <Wand2 className="mr-2 h-4 w-4" />
+                            Regenerate with AI
+                        </Button>
                     </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -364,6 +471,18 @@ export default function PlaywrightGeneratorPage() {
                                             <span className="sr-only">Copy code</span>
                                         </Button>
                                     )}
+                                    {generatedCode && (
+                                        <Button 
+                                            variant="secondary" 
+                                            size="sm" 
+                                            className="absolute bottom-4 right-4 shadow-md bg-white/10 text-white hover:bg-white/20 hover:text-white backdrop-blur-sm border-white/20" 
+                                            onClick={handleSaveToLibraryClick}
+                                            disabled={isSaving}
+                                        >
+                                            {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                                            {isSaving ? "Saving..." : "Save to Library"}
+                                        </Button>
+                                    )}
                                 </CardContent>
                             </Card>
                         </TabsContent>
@@ -378,6 +497,49 @@ export default function PlaywrightGeneratorPage() {
             onGenerateTests={handleGenerateFromPreview}
             issue={selectedIssue}
         />
+
+        <Dialog open={isSaveDialogOpen} onOpenChange={setIsSaveDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Save className="h-5 w-5 text-primary" />
+                Save to Code Library
+              </DialogTitle>
+              <DialogDescription>
+                Provide a descriptive name for this test script so you can easily identify it later in your library.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="flex items-center space-x-2 py-4">
+              <div className="grid flex-1 gap-2">
+                <Label htmlFor="scriptName" className="sr-only">
+                  Script Name
+                </Label>
+                <Input
+                  id="scriptName"
+                  value={saveScriptName}
+                  onChange={(e) => setSaveScriptName(e.target.value)}
+                  placeholder="e.g. Login Flow E2E Test"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      confirmSaveToLibrary();
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <DialogFooter className="sm:justify-end">
+              <Button type="button" variant="secondary" onClick={() => setIsSaveDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={confirmSaveToLibrary} disabled={!saveScriptName.trim() || isSaving}>
+                {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {isSaving ? "Saving..." : "Save Script"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useAuth } from '@/context/auth-context';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { PlaywrightSetupSchema, type PlaywrightSetup } from '@/lib/schemas';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,16 +15,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { ProjectSelector } from '@/components/ProjectSelector';
-import { Code, Info, Save } from 'lucide-react';
+import { Code, Info, Save, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ProjectContext } from '@/contexts/ProjectContext';
 
 export default function PlaywrightSetupPage() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, activeWorkspace } = useAuth();
   const { toast } = useToast();
   const { selectedProject } = useContext(ProjectContext);
   
   const [isClient, setIsClient] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   useEffect(() => { setIsClient(true); }, []);
 
   const form = useForm<PlaywrightSetup>({
@@ -37,12 +40,33 @@ export default function PlaywrightSetupPage() {
   });
 
   useEffect(() => {
-    if (selectedProject) {
+    async function loadSetup() {
+      if (!selectedProject || !activeWorkspace) {
+        form.reset({
+          baseUrl: '',
+          authFlow: '',
+          commonSelectors: '',
+          boilerplate: '',
+        });
+        return;
+      }
+
+      setIsLoading(true);
       try {
-        const savedSetup = localStorage.getItem(`playwrightSetup_${selectedProject.id}`);
-        if (savedSetup) {
-          const parsedSetup = PlaywrightSetupSchema.parse(JSON.parse(savedSetup));
-          form.reset(parsedSetup);
+        const { data, error } = await supabase
+          .from('playwright_setups')
+          .select('*')
+          .eq('workspace_id', activeWorkspace.id)
+          .eq('project_id', selectedProject.id)
+          .single();
+
+        if (data && !error) {
+          form.reset({
+            baseUrl: data.base_url || '',
+            authFlow: data.auth_flow || '',
+            commonSelectors: data.common_selectors || '',
+            boilerplate: data.boilerplate || '',
+          });
         } else {
           form.reset({
             baseUrl: '',
@@ -52,42 +76,53 @@ export default function PlaywrightSetupPage() {
           });
         }
       } catch (e) {
-        console.error("Failed to load or parse Playwright setup from localStorage", e);
-        form.reset();
+        console.error("Failed to load Playwright setup from Supabase", e);
+      } finally {
+        setIsLoading(false);
       }
-    } else {
-        form.reset({
-            baseUrl: '',
-            authFlow: '',
-            commonSelectors: '',
-            boilerplate: '',
-        });
     }
-  }, [selectedProject, form]);
 
-  const onSubmit = (data: PlaywrightSetup) => {
-    if (!selectedProject) {
+    loadSetup();
+  }, [selectedProject, activeWorkspace, form]);
+
+  const onSubmit = async (data: PlaywrightSetup) => {
+    if (!selectedProject || !activeWorkspace) {
       toast({
-        title: "No Project Selected",
-        description: "Please select a project before saving the setup.",
+        title: "Configuration Error",
+        description: "Please select a project and ensure you are in an active workspace.",
         variant: "destructive",
       });
       return;
     }
+    
+    setIsSaving(true);
     try {
-      localStorage.setItem(`playwrightSetup_${selectedProject.id}`, JSON.stringify(data));
+      const { error } = await supabase.from('playwright_setups').upsert({
+        workspace_id: activeWorkspace.id,
+        project_id: selectedProject.id,
+        base_url: data.baseUrl,
+        auth_flow: data.authFlow,
+        common_selectors: data.commonSelectors,
+        boilerplate: data.boilerplate,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'workspace_id, project_id' });
+
+      if (error) throw error;
+
       toast({
         title: "Setup Saved",
-        description: `Your Playwright setup for ${selectedProject.name} has been saved locally.`,
+        description: `Your Playwright setup for ${selectedProject.name} has been saved to the database.`,
         className: "bg-green-100 border-green-300 text-green-800 dark:bg-green-900 dark:border-green-700 dark:text-green-200"
       });
     } catch (error) {
-      console.error("Failed to save Playwright setup to localStorage", error);
+      console.error("Failed to save Playwright setup to Supabase", error);
       toast({
         title: "Error Saving",
-        description: "Could not save the setup to your browser's local storage.",
+        description: "Could not save the setup to the database.",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
   };
   
@@ -127,7 +162,7 @@ export default function PlaywrightSetupPage() {
                 </div>
             </div>
 
-            {selectedProject ? (
+            {selectedProject && activeWorkspace ? (
             <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
                 <FormField
@@ -199,12 +234,20 @@ export default function PlaywrightSetupPage() {
                     )}
                 />
 
-                <Button type="submit">
-                    <Save className="mr-2 h-4 w-4" />
+                <Button type="submit" disabled={isLoading || isSaving}>
+                    {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                     Save Setup for Project
                 </Button>
                 </form>
             </Form>
+             ) : selectedProject && !activeWorkspace ? (
+                <Alert className="mt-4" variant="destructive">
+                    <Info className="h-4 w-4" />
+                    <AlertTitle>Workspace Required</AlertTitle>
+                    <AlertDescription>
+                        You don't have an active workspace selected. Please refresh your browser or select a workspace from the Settings page.
+                    </AlertDescription>
+                </Alert>
              ) : (
                 <Alert className="mt-4">
                     <Info className="h-4 w-4" />

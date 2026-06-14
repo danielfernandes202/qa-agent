@@ -16,6 +16,11 @@ export interface JiraCredentials {
   apiToken: string;
 }
 
+export interface Workspace {
+  id: string;
+  name: string;
+}
+
 interface AuthContextType {
   user: User | null;
   login: (email: string, pass: string) => Promise<boolean>;
@@ -25,6 +30,10 @@ interface AuthContextType {
   credentials: JiraCredentials | null;
   setCredentials: (credentials: JiraCredentials | null) => Promise<void>;
   isAuthenticated: boolean;
+  workspaces: Workspace[];
+  activeWorkspace: Workspace | null;
+  setActiveWorkspace: (workspace: Workspace) => void;
+  fetchWorkspaces: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,6 +43,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [credentials, setCredentialsState] = useState<JiraCredentials | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeWorkspace, setActiveWorkspace] = useState<Workspace | null>(null);
   const router = useRouter();
 
   const fetchJiraCredentials = async () => {
@@ -58,6 +69,53 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
+  const fetchWorkspaces = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('workspaces')
+        .select('id, name')
+        .order('created_at', { ascending: true });
+        
+      if (error) {
+        console.warn("Failed to fetch workspaces (did you run the migration?):", error.message || JSON.stringify(error));
+      } else if (data && data.length > 0) {
+        setWorkspaces(data);
+        setActiveWorkspace(current => {
+          if (!current || !data.find(w => w.id === current.id)) {
+            return data[0];
+          }
+          return current;
+        });
+      } else {
+        // No workspaces found (migration ran but user had no previous scripts). Create a default one.
+        const { data: authData } = await supabase.auth.getUser();
+        if (authData.user) {
+           const newWorkspaceId = crypto.randomUUID();
+           const { error: insertError } = await supabase
+             .from('workspaces')
+             .insert([{ id: newWorkspaceId, name: 'My Workspace' }]);
+             
+           if (!insertError) {
+             await supabase.from('workspace_members').insert([{
+               workspace_id: newWorkspaceId,
+               user_id: authData.user.id,
+               role: 'owner'
+             }]);
+             const newWs = { id: newWorkspaceId, name: 'My Workspace' };
+             setWorkspaces([newWs]);
+             setActiveWorkspace(newWs);
+             return;
+           }
+        }
+
+        setWorkspaces([]);
+        setActiveWorkspace(null);
+      }
+    } catch (err) {
+      console.error("Exception fetching workspaces:", err);
+    }
+  };
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
@@ -67,10 +125,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             name: session.user.user_metadata?.full_name || session.user.email || 'User',
             email: session.user.email!
           });
-          await fetchJiraCredentials();
+          await Promise.all([fetchJiraCredentials(), fetchWorkspaces()]);
         } else {
           setUser(null);
           setCredentialsState(null);
+          setWorkspaces([]);
+          setActiveWorkspace(null);
           setIsInitialized(true);
         }
         setIsLoading(false);
@@ -85,7 +145,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           name: session.user.user_metadata?.full_name || session.user.email || 'User',
           email: session.user.email!
         });
-        await fetchJiraCredentials();
+        await Promise.all([fetchJiraCredentials(), fetchWorkspaces()]);
       } else {
         setIsInitialized(true);
       }
@@ -160,13 +220,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     await supabase.auth.signOut();
     setUser(null);
     setCredentials(null); // Clear Jira credentials on logout as well
+    setWorkspaces([]);
+    setActiveWorkspace(null);
     router.push('/');
   };
   
   const isAuthenticated = isInitialized ? !!credentials : false;
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, isLoading, credentials, setCredentials, isAuthenticated }}>
+    <AuthContext.Provider value={{ user, login, signup, logout, isLoading, credentials, setCredentials, isAuthenticated, workspaces, activeWorkspace, setActiveWorkspace, fetchWorkspaces }}>
       {children}
     </AuthContext.Provider>
   );

@@ -28,7 +28,7 @@ app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 const activePages = new Map<string, Page>();
-const activeStreams = new Map<string, (type: string, data: any) => void>();
+const activeSessions = new Map<string, boolean>();
 
 async function generateWithFallback(options: any, logInternal: (msg: string) => void) {
     try {
@@ -58,6 +58,16 @@ async function generateWithFallback(options: any, logInternal: (msg: string) => 
     }
 }
 
+app.delete('/api/live-tester/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    if (activeSessions.has(sessionId)) {
+        activeSessions.set(sessionId, false);
+        res.status(200).json({ message: "Session aborted." });
+    } else {
+        res.status(404).json({ error: "Session not found." });
+    }
+});
+
 app.post('/api/live-tester', async (req, res) => {
     try {
         const body = req.body;
@@ -73,31 +83,42 @@ app.post('/api/live-tester', async (req, res) => {
         }
 
         const sessionId = Math.random().toString(36).substring(7);
+        console.log(`Starting session ${sessionId}. URL: ${url}, TestDepth: ${testDepth}, MaxActions: ${maxActions}`);
+        
+        activeSessions.set(sessionId, true);
 
-        // Setup SSE response
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache, no-transform');
-        res.setHeader('Connection', 'keep-alive');
-        // Flush headers immediately
-        res.flushHeaders();
+        // Instantly reply with the sessionId
+        res.status(200).json({ sessionId });
 
-        const send = (type: string, data: any) => {
+        // Instantiate Supabase client to use Realtime Database insertions
+        const authHeader = req.headers['authorization'];
+        const { createClient } = await import('@supabase/supabase-js');
+        const scopedSupabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            { global: { headers: authHeader ? { Authorization: authHeader } : {} } }
+        );
+
+        const send = async (type: string, data: any) => {
             try {
-                res.write(`data: ${JSON.stringify({ type, data })}\n\n`);
+                if (!activeSessions.get(sessionId)) return;
+                await scopedSupabase.from('test_run_events').insert([{
+                    session_id: sessionId,
+                    type,
+                    data
+                }]);
             } catch (e) {
-                console.error("Stream closed", e);
+                console.error("Failed to insert stream event into Supabase", e);
             }
         };
-        
-        activeStreams.set(sessionId, send);
 
         let browser: Browser | null = null;
         let page: Page | null = null;
 
-        // Run the agent process asynchronously while holding the response open
+        // Run the agent process asynchronously
         (async () => {
             try {
-                send('log', `Starting headless browser session...`);
+                await send('log', `Starting headless browser session (Depth: ${testDepth}, Max Actions: ${maxActions})...`);
                 browser = await chromium.launch({
                     headless: true,
                     args: [
@@ -112,18 +133,18 @@ app.post('/api/live-tester', async (req, res) => {
                 });
                 activePages.set(sessionId, page);
 
-                send('log', `Navigating to ${url}...`);
+                await send('log', `Navigating to ${url}...`);
                 try {
                     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
                 } catch (e: any) {
-                    send('log', `Navigation timeout or error, proceeding anyway: ${e.message}`);
+                    await send('log', `Navigation timeout or error, proceeding anyway: ${e.message}`);
                 }
 
                 const takeScreenshot = async () => {
                     try {
                         const buffer = await page!.screenshot({ type: 'jpeg', quality: 60, timeout: 10000 });
                         const uri = `data:image/jpeg;base64,${buffer.toString('base64')}`;
-                        send('screenshot', uri);
+                        await send('screenshot', uri);
                         return uri;
                     } catch (e: any) {
                         console.error("Screenshot failed", e.message || e);
@@ -133,9 +154,9 @@ app.post('/api/live-tester', async (req, res) => {
 
                 const testsPerformed: string[] = [];
                 const agentLogs: string[] = [];
-                const logInternal = (msg: string) => {
+                const logInternal = async (msg: string) => {
                     agentLogs.push(msg);
-                    send('log', msg);
+                    await send('log', msg);
                 };
 
                 const navigateTool = ai.defineTool({
@@ -145,7 +166,7 @@ app.post('/api/live-tester', async (req, res) => {
                     outputSchema: z.string() as any,
                 }, async ({ url }) => {
                     try {
-                        logInternal(`Tool Action: Navigating to ${url}`);
+                        await logInternal(`Tool Action: Navigating to ${url}`);
                         await page!.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
                         return `Successfully navigated to ${url}`;
                     } catch (e: any) {
@@ -160,7 +181,7 @@ app.post('/api/live-tester', async (req, res) => {
                     outputSchema: z.string() as any,
                 }, async ({ selector }) => {
                     try {
-                        logInternal(`Tool Action: Clicking on element ${selector}`);
+                        await logInternal(`Tool Action: Clicking on element ${selector}`);
                         await page!.click(selector, { timeout: 8000 });
                         await page!.waitForTimeout(1500);
                         return `Successfully clicked element: ${selector}`;
@@ -176,7 +197,7 @@ app.post('/api/live-tester', async (req, res) => {
                     outputSchema: z.string() as any,
                 }, async ({ selector, text }) => {
                     try {
-                        logInternal(`Tool Action: Typing "${text}" into ${selector}`);
+                        await logInternal(`Tool Action: Typing "${text}" into ${selector}`);
                         await page!.fill(selector, text, { timeout: 8000 });
                         return `Successfully typed text into: ${selector}`;
                     } catch (e: any) {
@@ -190,7 +211,7 @@ app.post('/api/live-tester', async (req, res) => {
                     inputSchema: z.object({}) as any,
                     outputSchema: z.string() as any,
                 }, async () => {
-                    logInternal(`Tool Action: Extracting page info & DOM structure`);
+                    await logInternal(`Tool Action: Extracting page info & DOM structure`);
                     try {
                         const currentUrl = page!.url();
                         const title = await page!.title();
@@ -213,7 +234,7 @@ app.post('/api/live-tester', async (req, res) => {
                         });
                         return `URL: ${currentUrl}\nTitle: ${title}\nInteractive Elements:\n${simplifiedDOM}`;
                     } catch (e: any) {
-                        logInternal(`DOM extraction failed: ${e.message}`);
+                        await logInternal(`DOM extraction failed: ${e.message}`);
                         return `Failed to extract DOM. The page may have crashed. Error: ${e.message}`;
                     }
                 });
@@ -229,24 +250,40 @@ Your objective: ${instructions || "Explore the page, check for broken interactiv
 Instructions:
 1. Examine the screenshot provided in each turn.
 2. If you need to interact, use a tool. Wait for the tool result. 
-3. After max ${maxActions} actions, output a final JSON report containing testsPerformed, bugsIdentified, and agentLogs.
+3. You are permitted to perform up to ${maxActions} actions. DO NOT stop early unless you have thoroughly explored the application and clicked around to test dynamic states. Use as many of the ${maxActions} actions as necessary to deeply test the site.
+4. Output a final JSON report containing testsPerformed, bugsIdentified, and agentLogs ONLY when you are completely finished with testing. Do not output the JSON report to exit early.
+The JSON must strictly follow this structure:
+\`\`\`json
+{
+  "testsPerformed": ["action 1", "action 2"],
+  "bugsIdentified": [
+    {
+      "id": "bug-1",
+      "type": "layout", // must be one of: layout, content, design, accessibility
+      "severity": "medium", // must be one of: low, medium, high, critical
+      "title": "Short descriptive title",
+      "description": "Detailed explanation of the issue",
+      "element": "#optional-css-selector",
+      "suggestions": ["Suggestion 1"]
+    }
+  ],
+  "agentLogs": ["log 1"]
+}
+\`\`\`
 When you are ready to finish, stop calling tools and just return the final JSON report.`}]
                 }];
 
                 let actionCount = 0;
                 let finalOutput: any = null;
 
-                let isClientDisconnected = false;
-                req.on('close', () => {
-                    isClientDisconnected = true;
-                    logInternal("Client disconnected, aborting test...");
-                });
-
                 while (actionCount < maxActions) {
-                    if (isClientDisconnected) break;
+                    if (!activeSessions.get(sessionId)) {
+                        await logInternal("Session aborted by user. Stopping test.");
+                        break;
+                    }
                     
                     actionCount++;
-                    logInternal(`Starting AI Turn ${actionCount}...`);
+                    await logInternal(`Starting AI Turn ${actionCount}...`);
                     
                     const screenshotUri = await takeScreenshot();
                     
@@ -286,7 +323,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
 
                     chatHistory.push({ role: 'user', content: userMessageContent });
                     
-                    logInternal(`Consulting LLM...`);
+                    await logInternal(`Consulting LLM...`);
                     const response = await generateWithFallback({
                         messages: chatHistory as any,
                         tools: [navigateTool, clickTool, typeTool, getPageInfoTool],
@@ -310,7 +347,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                              if (result && typeof result === 'string' && result.includes("Successfully")) testsPerformed.push(`Performed: ${tReq.name} - ${JSON.stringify(tReq.input)}`);
                              
                              toolResults.push({ toolRequest: tReq, ref: tRef, output: result });
-                             logInternal(`LLM observed result: ${result}`);
+                             await logInternal(`LLM observed result: ${result}`);
                         }
                         chatHistory.push({ role: 'tool', content: toolResults.map(tr => ({ toolResponse: { ref: tr.ref, name: tr.toolRequest.name, output: tr.output || "No output provided" } })) });
                     } else {
@@ -327,7 +364,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                                 }
                             }
                         } catch (e: any) {
-                            logInternal(`JSON output failed schema validation: ${e.message}. Forcing retry...`);
+                            await logInternal(`JSON output failed schema validation: ${e.message}. Forcing retry...`);
                             chatHistory.push({ role: 'user', content: [{ text: "The JSON you provided did not match the requested schema exactly. Please provide the final JSON report again." }] });
                             continue;
                         }
@@ -335,32 +372,33 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                     }
                 }
                 
-                if (!finalOutput && !isClientDisconnected) {
-                      logInternal("Requesting final JSON summary from LLM...");
-                      const finalResponse = await generateWithFallback({
-                          messages: [...chatHistory, { role: 'user', content: [{ text: "Please provide the final JSON report now." }] }] as any,
-                          output: { schema: LiveTestingOutputSchema }
-                      }, logInternal);
-                      finalOutput = finalResponse.output;
+                if (!finalOutput && activeSessions.get(sessionId)) {
+                      await logInternal("Requesting final JSON summary from LLM...");
+                      try {
+                          const finalResponse = await generateWithFallback({
+                              messages: [...chatHistory, { role: 'user', content: [{ text: "Please provide the final JSON report now. Ensure it matches the requested schema exactly." }] }] as any,
+                              output: { schema: LiveTestingOutputSchema }
+                          }, logInternal);
+                          finalOutput = finalResponse.output;
+                      } catch (e: any) {
+                          await logInternal(`Final fallback generation failed: ${e.message}`);
+                      }
                  }
 
-                if (!finalOutput && !isClientDisconnected) {
-                    throw new Error("Agent failed to produce a valid report.");
+                if (!finalOutput && activeSessions.get(sessionId)) {
+                    await send('error', "Agent failed to produce a valid report.");
+                    return; // Early return to avoid saving incomplete run
                 }
 
-                if (isClientDisconnected) return;
-                
-                const authHeader = req.headers['authorization'];
-                const { createClient } = await import('@supabase/supabase-js');
-                const scopedSupabase = createClient(
-                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                    { global: { headers: authHeader ? { Authorization: authHeader } : {} } }
-                );
+                if (finalOutput && Array.isArray(finalOutput.bugsIdentified)) {
+                    finalOutput.bugsIdentified = finalOutput.bugsIdentified.filter((b: any) => b && typeof b === 'object' && b.title);
+                }
 
+                if (!activeSessions.get(sessionId)) return; // Aborted
+                
                 const finalScreenshotUri = await takeScreenshot();
                 if (finalScreenshotUri) {
-                    logInternal("Uploading final screenshot to Supabase Storage...");
+                    await logInternal("Uploading final screenshot to Supabase Storage...");
                     const token = authHeader ? authHeader.replace('Bearer ', '').trim() : null;
                     const { publicUrl, error: uploadError } = await uploadVisualTestImage(
                         finalScreenshotUri, 
@@ -369,9 +407,9 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                     );
                     if (publicUrl) {
                          finalOutput.screenshotUrl = publicUrl;
-                         logInternal("Final screenshot uploaded successfully.");
+                         await logInternal("Final screenshot uploaded successfully.");
                     } else if (uploadError) {
-                         logInternal(`Failed to upload final screenshot: ${uploadError.message}`);
+                         await logInternal(`Failed to upload final screenshot: ${uploadError.message}`);
                     }
                 }
                 
@@ -379,7 +417,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                 if (testsPerformed.length > 0) finalOutput.testsPerformed = testsPerformed;
                 
                 try {
-                    logInternal("Saving test run to Supabase...");
+                    await logInternal("Saving test run to Supabase...");
                     const { data: runData, error: runError } = await scopedSupabase
                         .from('test_runs')
                         .insert([{ tests_performed: testsPerformed.length || 1 }])
@@ -387,9 +425,9 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                         .single();
                         
                     if (runError) {
-                        logInternal(`Failed to save test run: ${runError.message}`);
+                        await logInternal(`Failed to save test run: ${runError.message}`);
                     } else if (runData && finalOutput.bugsIdentified && finalOutput.bugsIdentified.length > 0) {
-                        logInternal(`Generating embeddings for ${finalOutput.bugsIdentified.length} bugs...`);
+                        await logInternal(`Generating embeddings for ${finalOutput.bugsIdentified.length} bugs...`);
                         for (const bug of finalOutput.bugsIdentified) {
                             try {
                                 const embedResponse = await ai.embed({
@@ -417,25 +455,24 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                                     }]);
                                 }
                             } catch (embErr: any) {
-                                logInternal(`Failed to embed bug "${bug.title}": ${embErr.message}`);
+                                await logInternal(`Failed to embed bug "${bug.title}": ${embErr.message}`);
                             }
                         }
-                        logInternal("Saved bugs to Supabase successfully.");
+                        await logInternal("Saved bugs to Supabase successfully.");
                     }
                 } catch (e: any) {
-                    logInternal(`Error logging to Supabase: ${e.message}`);
+                    await logInternal(`Error logging to Supabase: ${e.message}`);
                 }
                 
-                send('result', finalOutput);
+                await send('result', finalOutput);
 
             } catch (e: any) {
                 console.error('LIVE TESTER ERROR:', e);
-                send('error', e.message || 'An error occurred during testing');
+                await send('error', e.message || 'An error occurred during testing');
             } finally {
                 activePages.delete(sessionId);
-                activeStreams.delete(sessionId);
+                activeSessions.delete(sessionId);
                 if (browser) await browser.close();
-                res.end();
             }
         })();
 
@@ -449,9 +486,8 @@ const server = app.listen(PORT, () => {
     console.log(`Live Tester Worker running on port ${PORT}`);
 });
 
-// Increase timeouts to prevent EPIPE when taking slow screenshots
+// Increase timeouts
 server.setTimeout(300000);
 server.keepAliveTimeout = 300000;
 
-// Keep process alive if express/node somehow unrefs the server
 setInterval(() => {}, 1000 * 60 * 60);

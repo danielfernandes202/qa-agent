@@ -5,6 +5,7 @@ import type { JiraIssue } from '@/app/actions';
 import { generateTestCasesAction, attachTestCasesToJiraAction, convertTestCasesToExcel } from '@/app/actions';
 import type { GenerateTestCasesOutput } from '@/lib/schemas';
 import { useAuth } from '@/context/auth-context';
+import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -43,7 +44,7 @@ interface TestCaseDialogProps {
 }
 
 export function TestCaseDialog({ issue, isOpen, onClose }: TestCaseDialogProps) {
-  const { credentials } = useAuth();
+  const { credentials, user } = useAuth();
   const { toast } = useToast();
   const [generatedTestCases, setGeneratedTestCases] = useState<GenerateTestCasesOutput>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,40 +63,63 @@ export function TestCaseDialog({ issue, isOpen, onClose }: TestCaseDialogProps) 
     }
   }, [isOpen, issue]);
 
-  const handleGenerate = useCallback(() => {
+  const handleGenerate = useCallback(async (forceRegenerate = false) => {
     if (!issue) return;
     
     setGeneratedTestCases([]);
     setError(null);
     setIsLoading(true);
 
-    generateTestCasesAction({
-      description: issue.description || '',
-      acceptanceCriteria: issue.acceptanceCriteria || '',
-      projectKey: issue.project.key,
-      coverageLevel: coverageLevel,
-    })
-      .then((data) => {
-        setGeneratedTestCases(data);
-        if (data.length === 0) {
+    try {
+      if (!forceRegenerate && user) {
+        const { data, error } = await supabase
+          .from('saved_scripts')
+          .select('test_cases')
+          .eq('user_id', user.uid)
+          .eq('jira_issue_key', issue.key)
+          .not('test_cases', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (data && !error && data.test_cases && data.test_cases.length > 0) {
+          setGeneratedTestCases(data.test_cases);
           toast({
-            title: "No Test Cases Generated",
-            description: "The AI couldn't generate test cases. Try adding more detail to the issue description or acceptance criteria.",
-            variant: "default",
+            title: "Loaded from Library",
+            description: "Test cases for this issue were found in your Code Library and loaded instantly.",
           });
+          setIsLoading(false);
+          return;
         }
-      })
-      .catch((err) => {
-        console.error(err);
-        setError(err.message || 'Failed to generate test cases.');
+      }
+
+      const data = await generateTestCasesAction({
+        description: issue.description || '',
+        acceptanceCriteria: issue.acceptanceCriteria || '',
+        projectKey: issue.project.key,
+        coverageLevel: coverageLevel,
+      });
+
+      setGeneratedTestCases(data);
+      if (data.length === 0) {
         toast({
-          title: 'Error Generating Test Cases',
-          description: err.message || 'An unexpected error occurred.',
-          variant: 'destructive',
+          title: "No Test Cases Generated",
+          description: "The AI couldn't generate test cases. Try adding more detail to the issue description or acceptance criteria.",
+          variant: "default",
         });
-      })
-      .finally(() => setIsLoading(false));
-  }, [issue, coverageLevel, toast]);
+      }
+    } catch (err: any) {
+      console.error(err);
+      setError(err.message || 'Failed to generate test cases.');
+      toast({
+        title: 'Error Generating Test Cases',
+        description: err.message || 'An unexpected error occurred.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [issue, coverageLevel, toast, user]);
   
   const handleDialogClose = useCallback(() => {
     // Fully reset state on close to ensure clean slate for next opening
@@ -200,10 +224,18 @@ export function TestCaseDialog({ issue, isOpen, onClose }: TestCaseDialogProps) 
                 </SelectContent>
               </Select>
             </div>
-            <Button onClick={handleGenerate} disabled={isLoading} className="w-[180px]">
-              {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
-              {generatedTestCases.length > 0 ? "Re-generate" : "Generate Tests"}
-            </Button>
+            <div className="flex gap-2">
+              {generatedTestCases.length > 0 && (
+                <Button variant="outline" onClick={() => handleGenerate(true)} disabled={isLoading} className="w-[140px]">
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Regenerate
+                </Button>
+              )}
+              <Button onClick={() => handleGenerate(false)} disabled={isLoading} className={generatedTestCases.length > 0 ? "w-[140px]" : "w-[180px]"}>
+                {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                {generatedTestCases.length > 0 ? "Generate" : "Generate Tests"}
+              </Button>
+            </div>
           </div>
 
           <div className="flex flex-col flex-grow overflow-hidden">

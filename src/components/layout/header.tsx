@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils';
 import { BrandLogo } from '../icons/BrandLogo';
 
 const Header = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, workspaces, activeWorkspace, setActiveWorkspace } = useAuth();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
 
@@ -37,6 +37,7 @@ const Header = () => {
     { href: "/qa-test-assistant/playwright-generator", label: "Playwright Generator", icon: Bot },
     { href: "/qa-test-assistant/visual-tester", label: "Visual Tester", icon: MonitorSmartphone },
     { href: "/qa-test-assistant/bug-library", label: "Bug Library", icon: Library },
+    { href: "/qa-test-assistant/code-library", label: "Code Library", icon: Code },
     { href: "/qa-test-assistant/playwright-setup", label: "Playwright Setup", icon: Code },
     { href: "/qa-test-assistant/setup", label: "Jira Setup", icon: Settings },
   ];
@@ -86,7 +87,32 @@ const Header = () => {
 
         <div className="flex items-center gap-4">
           {user ? (
-            <DropdownMenu>
+            <div className="flex items-center gap-2">
+              {activeWorkspace && workspaces.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                     <Button variant="outline" className="hidden md:flex items-center justify-center gap-2 h-9 px-3">
+                       <span className="text-sm font-medium truncate max-w-[150px]">{activeWorkspace.name}</span>
+                       <ChevronDown className="h-4 w-4 opacity-50" />
+                     </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56 bg-background/95 backdrop-blur-lg border-border">
+                     <DropdownMenuLabel>Switch Workspace</DropdownMenuLabel>
+                     <DropdownMenuSeparator />
+                     {workspaces.map(ws => (
+                       <DropdownMenuItem key={ws.id} onClick={() => setActiveWorkspace(ws)} className="cursor-pointer">
+                          <span className={cn(ws.id === activeWorkspace.id ? "font-bold text-primary" : "")}>{ws.name}</span>
+                       </DropdownMenuItem>
+                     ))}
+                     <DropdownMenuSeparator />
+                     <DropdownMenuItem asChild className="cursor-pointer">
+                       <Link href="/settings/workspace">Manage Workspace</Link>
+                     </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="hidden md:flex items-center justify-center gap-2">
                   <User className="h-4 w-4" />
@@ -101,6 +127,7 @@ const Header = () => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+            </div>
           ) : (
             <div className="hidden md:flex items-center gap-3">
                 <Link href="/login" className={cn(buttonVariants({variant: "ghost"}), "text-muted-foreground hover:text-foreground")}>

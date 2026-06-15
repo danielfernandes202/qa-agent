@@ -15,7 +15,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { AlertCircle, Bug, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FileText, Wand2, Eye, Bot } from 'lucide-react';
+import { AlertCircle, Bug, ChevronsLeft, ChevronLeft, ChevronRight, ChevronsRight, FileText, Wand2, Eye, Bot, Play } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import React, { useState, useEffect } from 'react';
 
@@ -24,6 +24,7 @@ interface IssueTableProps {
   onGenerateTestsClick?: (issue: JiraIssue) => void; // Made optional
   onViewIssueClick?: (issue: JiraIssue) => void;    // Made optional
   onActionClick?: (issue: JiraIssue) => void;       // Generic action
+  onRunLiveAgentClick?: (issue: JiraIssue) => void; // Add Live Agent handler
   isActionDisabled?: boolean;
   searchQuery?: string;
   actionType?: 'generateTests' | 'generateCode';    // Optional to define button
@@ -36,6 +37,7 @@ export function IssueTable({
     onGenerateTestsClick, 
     onViewIssueClick,
     onActionClick,
+    onRunLiveAgentClick,
     isActionDisabled = false, 
     searchQuery, 
     actionType 
@@ -207,6 +209,19 @@ export function IssueTable({
                         {React.cloneElement(icon, { className: "mr-0 sm:mr-2 h-4 w-4" })}
                         <span className="hidden sm:inline">{text}</span>
                         </Button>
+                        {onRunLiveAgentClick && (
+                            <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => onRunLiveAgentClick(issue)}
+                                className="shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
+                                disabled={isActionDisabled}
+                                title="Run Live Agent"
+                            >
+                                <Play className="mr-0 sm:mr-2 h-4 w-4" />
+                                <span className="hidden sm:inline">Live Agent</span>
+                            </Button>
+                        )}
                      </div>
                   </TableCell>
                 </TableRow>

@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Bug, FileText, Wand2, Paperclip, FileImage, File } from 'lucide-react';
+import { Loader2, Bug, FileText, Wand2, Paperclip, FileImage, File, Play } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import Image from 'next/image';
 import { useState, useEffect } from 'react';
@@ -96,9 +96,16 @@ interface JiraTicketPreviewDialogProps {
   isOpen: boolean;
   onClose: () => void;
   onGenerateTests: (issue: JiraIssue) => void;
+  onRunLiveAgent?: (issue: JiraIssue) => void;
 }
 
-export function JiraTicketPreviewDialog({ issue, isOpen, onClose, onGenerateTests }: JiraTicketPreviewDialogProps) {
+export function JiraTicketPreviewDialog({ 
+    issue, 
+    isOpen, 
+    onClose, 
+    onGenerateTests,
+    onRunLiveAgent 
+}: JiraTicketPreviewDialogProps) {
 
   const getStatusBadgeVariant = (status: string): "default" | "secondary" | "destructive" | "outline" => {
     if (!status) return "outline";
@@ -189,10 +196,18 @@ export function JiraTicketPreviewDialog({ issue, isOpen, onClose, onGenerateTest
             <DialogClose asChild>
                 <Button variant="outline">Close</Button>
             </DialogClose>
-            <Button onClick={handleGenerateClick}>
-                <Wand2 className="mr-2 h-4 w-4" />
-                Generate Tests
-            </Button>
+            <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={handleGenerateClick}>
+                    <Wand2 className="mr-2 h-4 w-4" />
+                    Generate Tests
+                </Button>
+                {onRunLiveAgent && (
+                    <Button onClick={() => onRunLiveAgent(issue!)}>
+                        <Play className="mr-2 h-4 w-4" />
+                        Run Live Agent
+                    </Button>
+                )}
+            </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

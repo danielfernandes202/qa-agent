@@ -119,44 +119,60 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        if (session?.user) {
-          setUser({
-            uid: session.user.id,
-            name: session.user.user_metadata?.full_name || session.user.email || 'User',
-            email: session.user.email!
-          });
-          await Promise.all([fetchJiraCredentials(), fetchWorkspaces()]);
-        } else {
-          setUser(null);
-          setCredentialsState(null);
-          setWorkspaces([]);
-          setActiveWorkspace(null);
-          setIsInitialized(true);
+        try {
+          if (session?.user) {
+            setUser({
+              uid: session.user.id,
+              name: session.user.user_metadata?.full_name || session.user.email || 'User',
+              email: session.user.email!
+            });
+            await Promise.all([fetchJiraCredentials(), fetchWorkspaces()]);
+          } else {
+            setUser(null);
+            setCredentialsState(null);
+            setWorkspaces([]);
+            setActiveWorkspace(null);
+            setIsInitialized(true);
+          }
+        } catch (err) {
+          console.error("Error in onAuthStateChange processing:", err);
+        } finally {
+          setIsLoading(false);
         }
-        setIsLoading(false);
       }
     );
 
     // Initial session fetch
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      if (session?.user) {
-        setUser({
-          uid: session.user.id,
-          name: session.user.user_metadata?.full_name || session.user.email || 'User',
-          email: session.user.email!
-        });
-        await Promise.all([fetchJiraCredentials(), fetchWorkspaces()]);
-      } else {
-        setIsInitialized(true);
-      }
-      setIsLoading(false);
-    });
+    supabase.auth.getSession()
+      .then(async ({ data: { session } }) => {
+        try {
+          if (session?.user) {
+            setUser({
+              uid: session.user.id,
+              name: session.user.user_metadata?.full_name || session.user.email || 'User',
+              email: session.user.email!
+            });
+            await Promise.all([fetchJiraCredentials(), fetchWorkspaces()]);
+          } else {
+            setIsInitialized(true);
+          }
+        } catch (err) {
+          console.error("Error in getSession processing:", err);
+        } finally {
+          setIsLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("getSession failed:", err);
+        setIsLoading(false);
+      });
 
     return () => subscription.unsubscribe();
   }, []);
   
   const setCredentials = async (newCredentials: JiraCredentials | null) => {
     setCredentialsState(newCredentials);
+    setIsInitialized(true); // Ensure that after setting credentials, it's considered initialized
     if (newCredentials) {
       const { error } = await supabase.rpc('store_jira_credentials', {
         p_jira_url: newCredentials.jiraUrl,

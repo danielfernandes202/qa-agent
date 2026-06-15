@@ -29,6 +29,7 @@ app.use(express.json());
 
 const activePages = new Map<string, Page>();
 const activeSessions = new Map<string, boolean>();
+const pendingInputs = new Map<string, (input: string | null) => void>();
 
 async function generateWithFallback(options: any, logInternal: (msg: string) => void) {
     try {
@@ -65,6 +66,20 @@ app.delete('/api/live-tester/:sessionId', async (req, res) => {
         res.status(200).json({ message: "Session aborted." });
     } else {
         res.status(404).json({ error: "Session not found." });
+    }
+});
+
+app.post('/api/live-tester/:sessionId/input', (req, res) => {
+    const { sessionId } = req.params;
+    const { input } = req.body;
+    
+    if (pendingInputs.has(sessionId)) {
+        const resolve = pendingInputs.get(sessionId)!;
+        resolve(input);
+        pendingInputs.delete(sessionId);
+        res.status(200).json({ success: true });
+    } else {
+        res.status(404).json({ error: "No pending input prompt for this session." });
     }
 });
 
@@ -239,6 +254,41 @@ app.post('/api/live-tester', async (req, res) => {
                     }
                 });
 
+                const askUserForInputTool = ai.defineTool({
+                    name: `askUserForInputTool_${sessionId}`,
+                    description: 'Pauses the agent and asks the human user for input, such as credentials, OTP codes, or guidance. Use this if you are stuck at a login page or CAPTCHA.',
+                    inputSchema: z.object({ question: z.string().describe("The question or instruction for the user") }) as any,
+                    outputSchema: z.string() as any,
+                }, async (args) => {
+                    const question = args?.question || "Please provide the requested input (e.g. credentials) to proceed.";
+                    await logInternal(`Tool Action: Asking user for input: "${question}"`);
+                    await send('prompt', { message: question });
+                    
+                    return new Promise<string>((resolve) => {
+                        let isResolved = false;
+                        const timeoutId = setTimeout(async () => {
+                            if (!isResolved) {
+                                isResolved = true;
+                                pendingInputs.delete(sessionId);
+                                await logInternal(`User input timed out after 2 minutes.`);
+                                resolve("Timeout: The user did not provide input in time. Proceed with whatever you can access or skip this step.");
+                            }
+                        }, 120000); // 2 minutes
+
+                        pendingInputs.set(sessionId, (input: string | null) => {
+                            if (!isResolved) {
+                                isResolved = true;
+                                clearTimeout(timeoutId);
+                                if (input) {
+                                    resolve(`User provided input: ${input}\n\nCRITICAL INSTRUCTION: You must now explicitly use the typeTool to enter this information into the correct fields. Do not assume any fields are already filled correctly, even if they appear to have text in them.`);
+                                } else {
+                                    resolve("User skipped providing input.");
+                                }
+                            }
+                        });
+                    });
+                });
+
                 let chatHistory: any[] = [{
                     role: 'system',
                     content: [{ text: `You are an autonomous QA Testing Agent. Your task is to perform an end-to-end test on a webpage.
@@ -326,7 +376,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                     await logInternal(`Consulting LLM...`);
                     const response = await generateWithFallback({
                         messages: chatHistory as any,
-                        tools: [navigateTool, clickTool, typeTool, getPageInfoTool],
+                        tools: [navigateTool, clickTool, typeTool, getPageInfoTool, askUserForInputTool],
                         returnToolRequests: true,
                     }, logInternal);
 
@@ -342,6 +392,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                              else if (tReq.name === `clickTool_${sessionId}`) result = await clickTool(tReq.input as any);
                              else if (tReq.name === `typeTool_${sessionId}`) result = await typeTool(tReq.input as any);
                              else if (tReq.name === `getPageInfoTool_${sessionId}`) result = await getPageInfoTool(tReq.input as any);
+                             else if (tReq.name === `askUserForInputTool_${sessionId}`) result = await askUserForInputTool(tReq.input as any);
                              else result = `Error: Tool ${tReq.name} is not recognized.`;
                              
                              if (result && typeof result === 'string' && result.includes("Successfully")) testsPerformed.push(`Performed: ${tReq.name} - ${JSON.stringify(tReq.input)}`);

@@ -10,7 +10,7 @@ export default function QATestAssistantLayout({
 }) {
   return (
     <ProjectProvider>
-      <div className="min-h-screen">{children}</div>
+      <div className="h-full">{children}</div>
     </ProjectProvider>
   );
 }

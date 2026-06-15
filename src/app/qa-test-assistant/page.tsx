@@ -8,17 +8,18 @@ import { IssueTable } from '@/components/IssueTable';
 import { TestCaseDialog } from '@/components/TestCaseDialog';
 import { RaiseBugModal } from '@/components/RaiseBugModal';
 import { JiraTicketPreviewDialog } from '@/components/JiraTicketPreviewDialog';
+import { LiveAgentDialog } from '@/components/LiveAgentDialog';
 import type { JiraIssue } from '@/app/actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LogOut, Info, Bug, FileUp, Search, TestTube, Library } from 'lucide-react';
+import { LogOut, Info, Bug, FileUp, Search, TestTube, Library, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { ProjectContext } from '@/contexts/ProjectContext';
 import { AuthForm } from '@/components/AuthForm';
 import { motion } from 'motion/react';
 
 export default function QATestAssistantPage() {
-  const { isAuthenticated, credentials, logout, setCredentials } = useAuth();
+  const { isAuthenticated, credentials, logout, setCredentials, isLoading } = useAuth();
   const { 
     selectedProject, 
     searchTerm, 
@@ -30,6 +31,7 @@ export default function QATestAssistantPage() {
   const [isRaiseBugModalOpen, setIsRaiseBugModalOpen] = useState(false);
   const [isTestCaseDialogOpen, setIsTestCaseDialogOpen] = useState(false);
   const [isTicketPreviewOpen, setIsTicketPreviewOpen] = useState(false);
+  const [isLiveAgentDialogOpen, setIsLiveAgentDialogOpen] = useState(false);
   
   const [selectedIssue, setSelectedIssue] = useState<JiraIssue | null>(null);
 
@@ -56,6 +58,18 @@ export default function QATestAssistantPage() {
     }, 150);
   };
 
+  const handleRunLiveAgent = (issue: JiraIssue) => {
+    setSelectedIssue(issue);
+    setIsLiveAgentDialogOpen(true);
+  };
+
+  const handleRunLiveAgentFromPreview = (issue: JiraIssue) => {
+    setIsTicketPreviewOpen(false);
+    setTimeout(() => {
+        handleRunLiveAgent(issue);
+    }, 150);
+  };
+
   const openRaiseBugModal = () => {
     if (selectedProject) {
       setIsRaiseBugModalOpen(true);
@@ -73,6 +87,14 @@ export default function QATestAssistantPage() {
   };
 
   if (!isClient) return null; 
+
+  if (isLoading) {
+    return (
+      <div className="min-h-[80vh] flex items-center justify-center p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return (
@@ -215,6 +237,7 @@ export default function QATestAssistantPage() {
               onActionClick={handleGenerateTestCases}
               actionType="generateTests"
               onViewIssueClick={handlePreviewIssue}
+              onRunLiveAgentClick={handleRunLiveAgent}
               searchQuery={activeSearch}
             />
           </div>
@@ -241,7 +264,15 @@ export default function QATestAssistantPage() {
         isOpen={isTicketPreviewOpen}
         onClose={() => setIsTicketPreviewOpen(false)}
         onGenerateTests={handleGenerateTestsFromPreview}
+        onRunLiveAgent={handleRunLiveAgentFromPreview}
         issue={selectedIssue}
+      />
+
+      <LiveAgentDialog
+        isOpen={isLiveAgentDialogOpen}
+        onOpenChange={setIsLiveAgentDialogOpen}
+        issue={selectedIssue}
+        projectId={selectedProject?.id || ''}
       />
     </div>
   );

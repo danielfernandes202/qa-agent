@@ -8,7 +8,9 @@ export async function executeWithFallback<Input, Output>(
 ): Promise<Output> {
   const models = [
     'googleai/gemini-3.1-flash-lite',
-    'googleai/gemini-1.5-flash'
+    'googleai/gemma-4-31b-it',
+    'googleai/gemma-4-26b-a4b-it',
+    'googleai/gemini-2.5-flash'
   ];
 
   for (const model of models) {

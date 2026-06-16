@@ -166,7 +166,7 @@ Google credentials, Jira tokens, and API keys are stored in your own Supabase Va
 ## Project Structure
 
 ```
-qa-agenty/
+qa-agent/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   └── qa-test-assistant/  # Core features

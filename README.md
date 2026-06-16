@@ -88,7 +88,7 @@ QAgent is split into two separate processes that communicate via HTTP and Supaba
 1. **Clone and install dependencies:**
 ```bash
 git clone <repo-url>
-cd newfrancislegacy
+cd qa-agent
 npm install
 cd worker && npm install && cd ..
 ```
@@ -166,7 +166,7 @@ Google credentials, Jira tokens, and API keys are stored in your own Supabase Va
 ## Project Structure
 
 ```
-newfrancislegacy/
+qa-agenty/
 ├── src/
 │   ├── app/                    # Next.js App Router
 │   │   └── qa-test-assistant/  # Core features

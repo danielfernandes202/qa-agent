@@ -121,15 +121,15 @@ npm run dev
 
 ## Screenshots
 
-> 📸 *Screenshots coming soon*
 
-<!--
+
+
 ![Visual Tester Dashboard](./docs/screenshots/visual-tester.png)
 *The Visual AI Tester in action, navigating a web app autonomously*
 
-![Document Importer](./docs/screenshots/document-importer.png)
-*Converting PRDs into Jira tickets automatically*
--->
+![Dashboard](./docs/screenshots/dashboard.png)
+*Dashboard for QAgent*
+
 
 See the `/docs/screenshots/` directory for images
 

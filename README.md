@@ -1,141 +1,222 @@
 <div align="center">
   <img src="public/globe.svg" alt="QAgent Logo" width="120" height="120" />
-  
-  # 🚀 QAgent (New Francis Legacy)
-  
+
+  # QAgent
+
   **The Autonomous QA & Product Engineering Copilot**
-  
+
   [![Next.js 15](https://img.shields.io/badge/Next.js-15-black?style=for-the-badge&logo=next.js)](https://nextjs.org/)
   [![Supabase](https://img.shields.io/badge/Supabase-Database_&_Auth-3ECF8E?style=for-the-badge&logo=supabase)](https://supabase.com/)
-  [![Genkit & Gemini](https://img.shields.io/badge/AI-Google_Genkit_&_Gemini-4285F4?style=for-the-badge&logo=google)](https://ai.google.dev/)
+  [![Genkit](https://img.shields.io/badge/AI-Google_Genkit_&_Gemini-4285F4?style=for-the-badge&logo=google)](https://developers.google.com/genkit/)
   [![Playwright](https://img.shields.io/badge/Automation-Playwright-2EAD33?style=for-the-badge&logo=playwright)](https://playwright.dev/)
 </div>
 
 <br />
 
-## 📖 Executive Summary
+## Executive Summary
 
-QAgent is an advanced, AI-powered Quality Assurance and Product Engineering assistant designed to bridge the gap between product requirements, manual testing, and automated E2E testing. 
+QAgent is an AI-powered Quality Assurance platform that bridges the gap between product requirements, manual testing, and automated E2E testing.
 
-By leveraging the capabilities of **Google Gemini** (via the Genkit framework) and **Playwright**, QAgent intelligently navigates web applications, translates product documents into structured Jira tickets, identifies visual and accessibility bugs autonomously, and generates robust test automation scripts with zero manual overhead.
-
----
-
-## 🎯 Target Audience
-
-QAgent is built for modern, agile development teams aiming to eliminate the bottleneck of manual quality assurance:
-- **QA Engineers & SDETs**: Rapidly transition from manual test execution to automated script generation, saving hundreds of hours in Playwright scaffolding.
-- **Product Managers**: Instantly convert PRDs (Product Requirements Documents) and PDFs into granular, ready-for-development Jira Epics, Stories, and Sub-tasks.
-- **Developers**: Seamlessly identify visual bugs, validate links, and verify accessibility compliance (WCAG) before code hits production.
+By leveraging **Google Gemini** (via the Genkit framework) and **Playwright**, QAgent:
+- Intelligently navigates web applications for visual testing
+- Translates product documents into structured Jira tickets
+- Identifies visual and accessibility bugs autonomously
+- Generates production-ready Playwright test scripts with zero manual overhead
 
 ---
 
-## 💡 The "Why" and "How"
+## Target Audience
 
-### **The Why (The Problem)**
-Traditional QA pipelines are fragmented. Product managers write requirements in isolated documents. QA engineers manually translate those into test cases. SDETs spend weeks writing brittle automation scripts. Meanwhile, visual regressions and accessibility issues slip into production because human visual verification is slow and error-prone.
+QAgent is built for modern, agile teams:
 
-### **The How (The Solution)**
-QAgent centralizes the entire pipeline into a single, autonomous platform:
-1. **Ingest**: It ingests PDFs and PRDs, using AI to structure them directly into your project management tools.
-2. **Explore**: It uses a headless browser (Playwright) driven by an autonomous AI agent to interact with your application exactly like a real user.
-3. **Analyze**: It captures DOM snapshots and screenshots, running them through multimodal AI to detect layout shifts, content errors, and accessibility violations.
-4. **Automate**: It automatically generates reliable Playwright scripts based on the identified test cases and user flows.
+ Rapidly transition from manual test execution to automated script generation. Identify visual bugs, validate links, and verify accessibility compliance (WCAG) before code hits production Instantly convert PRDs and PDFs into ready-for-development Jira tickets
+
 
 ---
 
-## ✨ Core Functional Capabilities
+## Core Features
 
-### 1. 🤖 Autonomous Live Tester & Visual Analysis
-Point QAgent to any URL, and it will:
-- Navigate the DOM and interact with interactive elements.
-- Capture pixel-perfect screenshots and DOM snapshots.
-- Run multi-modal analysis to flag **Layout, Content, Design, and Accessibility** issues.
-- Generate a comprehensive, severity-ranked JSON report of all visual bugs.
-
-### 2. 📝 Document Importer -> Jira Ticket Generator
-Upload product requirements (PDFs):
-- QAgent's AI reads and comprehends the document context, target persona, and product goals.
-- It breaks the document down into a hierarchical structure of **Epics, Stories, Tasks, and Sub-tasks**.
-- Automatically drafts and pushes these tickets to your Jira board.
-
-### 3. ⚙️ Playwright E2E Script Generator
-Turn natural language or Jira acceptance criteria into executable code:
-- Automatically scaffolds `playwright-test` scripts.
-- Incorporates your project's custom Base URL, Authentication flows, and specific DOM selectors.
-- Outputs clean, structured, and modular E2E test files.
-
-### 4. 🛡️ Cybersecurity & Threat Analyzer
-- Scans user inputs, emails, or text for potential security threats.
-- Extracts Indicators of Compromise (IoCs) like malicious IPs, domains, or file hashes.
-- Provides actionable mitigation recommendations.
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Visual AI Tester** | Autonomous agent that navigates your app, finds visual bugs, and interacts live | ✅ Live |
+| **Document Importer** | Extracts requirements from PDFs/Word docs and generates Jira epics/stories | ✅ Live |
+| **Playwright Generator** | Creates production-grade E2E test automation code from requirements | ✅ Live |
+| **Bug Library** | Semantic search with pgvector for historical bug analysis | ✅ Live |
 
 ---
 
-## 🏗️ Technology Stack
+## Architecture
 
-The architecture is split into a highly responsive frontend and a robust, scalable backend worker:
+QAgent is split into two separate processes that communicate via HTTP and Supabase real-time events:
 
-### Frontend
-- **Framework**: [Next.js 15](https://nextjs.org/) (App Router)
-- **Styling**: [TailwindCSS v3](https://tailwindcss.com/) + [Radix UI](https://www.radix-ui.com/) (Shadcn components)
-- **State & Data Fetching**: React Query
-- **Deployment**: Vercel
+```
+┌─────────────────┐     HTTP/WS      ┌──────────────────┐
+│   Next.js App   │ ◄──────────────► │  Express Worker  │
+│   (Port 3000)   │   (Port 3001)    │  (Port 3001)     │
+└────────┬────────┘                  └────────┬─────────┘
+         │                                    │
+         │         Supabase Realtime          │
+         └──────────────┬─────────────────────┘
+                    Supabase
+              (Postgres + Auth + Storage)
+```
 
-### Backend & AI
-- **Database & Auth**: [Supabase](https://supabase.com/) (PostgreSQL, Supabase Auth, Supabase Storage)
-- **Vector Search**: `pgvector` for semantic search of bugs and test cases.
-- **AI Orchestration**: [Google Genkit](https://firebase.google.com/docs/genkit)
-- **AI Models**: Google Gemini (`gemini-2.5-flash`, `gemini-3.1-flash-lite`, `gemma-4`)
-- **Browser Automation**: [Playwright](https://playwright.dev/) running in an Express Node.js Worker
+### Frontend (Next.js 15)
+- **Framework**: Next.js 15 with App Router, React 18, TypeScript
+- **UI**: Tailwind CSS v3 + Radix UI (Shadcn components)
+- **State**: TanStack Query (React Query)
+- **Auth**: Supabase Auth
 
----
-
-## 📊 Feasibility Assessment
-
-**Technical Feasibility: High**
-The application successfully integrates standard, enterprise-ready tools. The split architecture (Vercel for frontend, persistent Node.js worker for Playwright) circumvents serverless timeout limitations, ensuring long-running AI navigation tasks complete reliably.
-
-**Operational Feasibility: High**
-Supabase provides a zero-maintenance database layer with out-of-the-box authentication and storage for screenshots. The use of Gemini's highly efficient `flash` models ensures cost-effective scalability for AI operations.
-
-**Market Feasibility: High**
-As teams ship faster with AI-assisted coding tools, QA is becoming the primary bottleneck. A tool that automates the translation of requirements to tests to automation scripts perfectly aligns with current market demands for SDLC acceleration.
+### Worker (Express + Playwright)
+- **Runtime**: Express.js with TypeScript
+- **AI**: Genkit + Google Gemini models
+- **Browser**: Playwright (Chromium)
+- **Vector Embeddings**: Gemini embedding models
 
 ---
 
-## 🚀 Getting Started
+## Getting Started
 
 ### Prerequisites
-- Node.js 18+
-- Supabase Project (with Postgres, Storage, and Auth enabled)
-- Google Generative AI API Key
 
-### 1. Environment Setup
-Copy the example environment file and fill in your keys:
+- Node.js 18+ and npm
+- Supabase account (free tier works)
+- Gemini API key from [Google AI Studio](https://aistudio.google.com/)
+
+### Installation
+
+1. **Clone and install dependencies:**
+```bash
+git clone <repo-url>
+cd newfrancislegacy
+npm install
+cd worker && npm install && cd ..
+```
+
+2. **Configure environment:**
 ```bash
 cp .env.example .env
 ```
+Edit `.env` and fill in your Supabase and Gemini credentials. See `.env.example` for required variables.
 
-### 2. Frontend Development
-```bash
-npm install
-npm run dev
-```
-The dashboard will be available at `http://localhost:3000`.
+3. **Set up Supabase:**
+- Create a new project at [supabase.com](https://supabase.com)
+- Enable the **pgvector** extension for semantic search
+- Run migrations (see `supabase/migrations/` if available)
 
-### 3. Worker Setup (Playwright & AI Server)
-The worker handles the heavy lifting for browser automation and AI processing.
+4. **Start the worker:**
 ```bash
 cd worker
-npm install
-npx playwright install
+npx ts-node server.ts
+```
+
+5. **Start the frontend (new terminal):**
+```bash
 npm run dev
 ```
-The worker will start on `http://localhost:3001`.
+
+6. Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
-<div align="center">
-  <i>Built with ❤️ for modern engineering teams.</i>
-</div>
+## Screenshots
+
+> 📸 *Screenshots coming soon*
+
+<!--
+![Visual Tester Dashboard](./docs/screenshots/visual-tester.png)
+*The Visual AI Tester in action, navigating a web app autonomously*
+
+![Document Importer](./docs/screenshots/document-importer.png)
+*Converting PRDs into Jira tickets automatically*
+-->
+
+See the `/docs/screenshots/` directory for images
+
+---
+
+## Key Concepts
+
+### Human-in-the-Loop
+QAgent's Visual Tester includes an **approval layer**. When the AI encounters uncertainty, it pauses and asks for human input. This makes it collaborative, not black-box.
+
+### Care over Speed
+Features like semantic bug search and generated Playwright code are designed for **confidence**, not just speed. Indexes are built for accuracy, and data is validated.
+
+### Private by Default
+Google credentials, Jira tokens, and API keys are stored in your own Supabase Vault. QAgent is SaaS-friendly but data-sovereign.
+
+---
+
+## Tech Stack Deep Dive
+
+| Category | Technology |
+|----------|------------|
+| **Framework** | Next.js 15 (App Router) |
+| **Language** | TypeScript |
+| **AI** | Genkit, Google Gemini (Flash, Gemma) |
+| **Automation** | Playwright (Chromium) |
+| **Backend** | Supabase (Postgres, Auth, Storage, PgVector) |
+| **Styling** | Tailwind CSS, Radix UI |
+| **State** | TanStack Query |
+| **Testing** | Jest, React Testing Library |
+
+---
+
+## Project Structure
+
+```
+newfrancislegacy/
+├── src/
+│   ├── app/                    # Next.js App Router
+│   │   └── qa-test-assistant/  # Core features
+│   │       ├── visual-tester/
+│   │       ├── document-importer/
+│   │       ├── playwright-generator/
+│   │       └── bug-library/
+│   ├── components/             # Reusable UI components
+│   ├── lib/                    # Utilities, Supabase client, schemas
+│   └── hooks/                  # Custom React hooks
+├── worker/                     # Express/Playwright microservice
+│   ├── server.ts               # Main worker entry
+│   └── utils.ts                # Worker utilities
+└── docs/                       # Documentation, screenshots
+```
+
+---
+
+## Development Commands
+
+```bash
+# Frontend
+dev                 # Start Next.js dev server on :3000
+build               # Production build
+start               # Production server
+lint                # ESLint
+test                # Run tests (Jest watch mode)
+
+# Worker
+cd worker && ts-node server.ts    # Start worker on :3001
+```
+
+---
+
+## Deployment
+
+### Railway (Worker)
+1. Create a new Railway project
+2. Connect your GitHub repo
+3. Set the root directory to `worker/`
+4. Add environment variables from `.env.example`
+5. Deploy
+
+### Vercel (Frontend)
+1. Connect your GitHub repo to Vercel
+2. Set framework preset to Next.js
+3. Add environment variables
+4. Deploy
+
+
+---
+
+ Built by [@danielfernandes202](https://github.com/danielfernandes202)

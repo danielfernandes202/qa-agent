@@ -7,10 +7,21 @@ import { googleAI } from '@genkit-ai/google-genai';
 import { LiveTestingOutputSchema, uploadVisualTestImage } from './utils';
 import * as dotenv from 'dotenv';
 import path from 'path';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { transitionRunState } from './state-machine';
 
 // Only load dotenv if we're not in production (e.g. local dev)
 if (process.env.NODE_ENV !== 'production') {
     dotenv.config({ path: path.join(__dirname, '../.env') });
+}
+
+function getSupabase(req: express.Request): SupabaseClient {
+    const authHeader = req.headers['authorization'];
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { global: { headers: authHeader ? { Authorization: authHeader } : {} } }
+    );
 }
 
 const ai = genkit({
@@ -28,8 +39,6 @@ app.use(cors({ origin: allowedOrigins }));
 app.use(express.json());
 
 const activePages = new Map<string, Page>();
-const activeSessions = new Map<string, boolean>();
-const pendingInputs = new Map<string, (input: string | null) => void>();
 
 async function generateWithFallback(options: any, logInternal: (msg: string) => void) {
     try {
@@ -61,25 +70,35 @@ async function generateWithFallback(options: any, logInternal: (msg: string) => 
 
 app.delete('/api/live-tester/:sessionId', async (req, res) => {
     const { sessionId } = req.params;
-    if (activeSessions.has(sessionId)) {
-        activeSessions.set(sessionId, false);
-        res.status(200).json({ message: "Session aborted." });
-    } else {
-        res.status(404).json({ error: "Session not found." });
+    try {
+        const scopedSupabase = getSupabase(req);
+        const { data } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+        if (data && data.current_state !== 'done' && data.current_state !== 'failed') {
+            await transitionRunState(scopedSupabase, sessionId, data.current_state, 'failed', 'user_aborted');
+            res.status(200).json({ message: "Session aborted." });
+        } else {
+            res.status(404).json({ error: "Session not found or already finished." });
+        }
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
     }
 });
 
-app.post('/api/live-tester/:sessionId/input', (req, res) => {
+app.post('/api/live-tester/:sessionId/input', async (req, res) => {
     const { sessionId } = req.params;
     const { input } = req.body;
-    
-    if (pendingInputs.has(sessionId)) {
-        const resolve = pendingInputs.get(sessionId)!;
-        resolve(input);
-        pendingInputs.delete(sessionId);
-        res.status(200).json({ success: true });
-    } else {
-        res.status(404).json({ error: "No pending input prompt for this session." });
+    try {
+        const scopedSupabase = getSupabase(req);
+        const { data } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+        
+        if (data && data.current_state === 'awaiting_input') {
+            await transitionRunState(scopedSupabase, sessionId, 'awaiting_input', 'exploring', 'input_received', { input });
+            res.status(200).json({ success: true });
+        } else {
+            res.status(404).json({ error: "No pending input prompt for this session." });
+        }
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
     }
 });
 
@@ -98,30 +117,38 @@ app.post('/api/live-tester', async (req, res) => {
             return res.status(400).json({ error: "URL is required" });
         }
 
-        const sessionId = Math.random().toString(36).substring(7);
+        const scopedSupabase = getSupabase(req);
+
+        // Instantly reply with the sessionId, which is now the test_run DB UUID
+        const { data: runData, error: runError } = await scopedSupabase
+            .from('test_runs')
+            .insert([{ tests_performed: 0 }])
+            .select('id')
+            .single();
+
+        if (runError || !runData) {
+            return res.status(500).json({ error: runError?.message || "Failed to create test run" });
+        }
+
+        const sessionId = runData.id;
         console.log(`Starting session ${sessionId}. URL: ${url}, Intent: ${intent || 'None'}, TestDepth: ${testDepth}, MaxActions: ${maxActions}`);
         
-        activeSessions.set(sessionId, true);
-
-        // Instantly reply with the sessionId
         res.status(200).json({ sessionId });
 
-        // Instantiate Supabase client to use Realtime Database insertions
+        // helper for tokens
         const authHeader = req.headers['authorization'];
-        const { createClient } = await import('@supabase/supabase-js');
-        const scopedSupabase = createClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            { global: { headers: authHeader ? { Authorization: authHeader } : {} } }
-        );
 
         const send = async (type: string, data: any) => {
             try {
-                if (!activeSessions.get(sessionId)) return;
+                const { data: st } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+                if (st && (st.current_state === 'failed' || st.current_state === 'done')) return;
+                
                 await scopedSupabase.from('test_run_events').insert([{
-                    session_id: sessionId,
-                    type,
-                    data
+                    test_run_id: sessionId,
+                    event_type: 'stream_log',
+                    from_state: st ? st.current_state : 'exploring',
+                    to_state: st ? st.current_state : 'exploring',
+                    payload: { stream_type: type, data }
                 }]);
             } catch (e) {
                 console.error("Failed to insert stream event into Supabase", e);
@@ -134,6 +161,7 @@ app.post('/api/live-tester', async (req, res) => {
         // Run the agent process asynchronously
         (async () => {
             try {
+                await transitionRunState(scopedSupabase, sessionId, 'planned', 'exploring', 'start_browser', { url, testDepth, maxActions });
                 await send('log', `Starting headless browser session (Depth: ${testDepth}, Max Actions: ${maxActions})...`);
                 browser = await chromium.launch({
                     headless: true,
@@ -265,28 +293,41 @@ app.post('/api/live-tester', async (req, res) => {
                     await logInternal(`Tool Action: Asking user for input: "${question}"`);
                     await send('prompt', { message: question });
                     
+                    await transitionRunState(scopedSupabase, sessionId, 'exploring', 'awaiting_input', 'ask_user', { question });
+                    
                     return new Promise<string>((resolve) => {
-                        let isResolved = false;
-                        const timeoutId = setTimeout(async () => {
-                            if (!isResolved) {
-                                isResolved = true;
-                                pendingInputs.delete(sessionId);
-                                await logInternal(`User input timed out after 2 minutes.`);
-                                resolve("Timeout: The user did not provide input in time. Proceed with whatever you can access or skip this step.");
-                            }
-                        }, 120000); // 2 minutes
-
-                        pendingInputs.set(sessionId, (input: string | null) => {
-                            if (!isResolved) {
-                                isResolved = true;
-                                clearTimeout(timeoutId);
+                        let timeElapsed = 0;
+                        const interval = setInterval(async () => {
+                            const { data } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+                            if (data?.current_state === 'exploring') {
+                                clearInterval(interval);
+                                const { data: events } = await scopedSupabase.from('test_run_events')
+                                    .select('payload')
+                                    .eq('test_run_id', sessionId)
+                                    .eq('event_type', 'input_received')
+                                    .order('created_at', { ascending: false })
+                                    .limit(1);
+                                const input = events?.[0]?.payload?.input;
                                 if (input) {
                                     resolve(`User provided input: ${input}\n\nCRITICAL INSTRUCTION: You must now explicitly use the typeTool to enter this information into the correct fields. Do not assume any fields are already filled correctly, even if they appear to have text in them.`);
                                 } else {
                                     resolve("User skipped providing input.");
                                 }
+                            } else if (data?.current_state === 'failed') {
+                                clearInterval(interval);
+                                resolve("Timeout: The user aborted or test failed.");
                             }
-                        });
+                            
+                            timeElapsed += 2000;
+                            if (timeElapsed >= 120000) {
+                                clearInterval(interval);
+                                if (data?.current_state === 'awaiting_input') {
+                                    await transitionRunState(scopedSupabase, sessionId, 'awaiting_input', 'exploring', 'timeout');
+                                }
+                                await logInternal(`User input timed out after 2 minutes.`);
+                                resolve("Timeout: The user did not provide input in time. Proceed with whatever you can access or skip this step.");
+                            }
+                        }, 2000);
                     });
                 });
 
@@ -336,12 +377,14 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                 let finalOutput: any = null;
 
                 while (actionCount < maxActions) {
-                    if (!activeSessions.get(sessionId)) {
+                    const { data: runData } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+                    if (!runData || runData.current_state === 'failed' || runData.current_state === 'done') {
                         await logInternal("Session aborted by user. Stopping test.");
                         break;
                     }
                     
                     actionCount++;
+                    await transitionRunState(scopedSupabase, sessionId, 'exploring', 'exploring', 'start_turn', { turn: actionCount }, actionCount, maxActions - actionCount);
                     await logInternal(`Starting AI Turn ${actionCount}...`);
                     
                     const screenshotUri = await takeScreenshot();
@@ -432,7 +475,12 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                     }
                 }
                 
-                if (!finalOutput && activeSessions.get(sessionId)) {
+                const { data: loopEndState } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+                if (loopEndState && loopEndState.current_state === 'exploring') {
+                    await transitionRunState(scopedSupabase, sessionId, 'exploring', 'judging', 'evaluate_report');
+                }
+                
+                if (!finalOutput && loopEndState && loopEndState.current_state !== 'failed') {
                       await logInternal("Requesting final JSON summary from LLM...");
                       try {
                           const finalResponse = await generateWithFallback({
@@ -445,7 +493,8 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                       }
                  }
 
-                if (!finalOutput && activeSessions.get(sessionId)) {
+                const { data: finalStateCheck } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+                if (!finalOutput && finalStateCheck && finalStateCheck.current_state !== 'failed') {
                     await send('error', "Agent failed to produce a valid report.");
                     return; // Early return to avoid saving incomplete run
                 }
@@ -454,7 +503,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                     finalOutput.bugsIdentified = finalOutput.bugsIdentified.filter((b: any) => b && typeof b === 'object' && b.title);
                 }
 
-                if (!activeSessions.get(sessionId)) return; // Aborted
+                if (finalStateCheck && finalStateCheck.current_state === 'failed') return; // Aborted
                 
                 const finalScreenshotUri = await takeScreenshot();
                 if (finalScreenshotUri) {
@@ -478,15 +527,14 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                 
                 try {
                     await logInternal("Saving test run to Supabase...");
-                    const { data: runData, error: runError } = await scopedSupabase
+                    const { error: runError } = await scopedSupabase
                         .from('test_runs')
-                        .insert([{ tests_performed: testsPerformed.length || 1 }])
-                        .select('id')
-                        .single();
+                        .update({ tests_performed: testsPerformed.length || 1 })
+                        .eq('id', sessionId);
                         
                     if (runError) {
                         await logInternal(`Failed to save test run: ${runError.message}`);
-                    } else if (runData && finalOutput.bugsIdentified && finalOutput.bugsIdentified.length > 0) {
+                    } else if (finalOutput.bugsIdentified && finalOutput.bugsIdentified.length > 0) {
                         await logInternal(`Generating embeddings for ${finalOutput.bugsIdentified.length} bugs...`);
                         for (const bug of finalOutput.bugsIdentified) {
                             try {
@@ -507,7 +555,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                                     await scopedSupabase
                                     .from('visual_bugs')
                                     .insert([{
-                                        test_run_id: runData.id,
+                                        test_run_id: sessionId,
                                         description: `${bug.title}: ${bug.description}`,
                                         severity: bug.severity,
                                         screenshot_url: bug.screenshotUrl || finalOutput.screenshotUrl,
@@ -529,9 +577,20 @@ When you are ready to finish, stop calling tools and just return the final JSON 
             } catch (e: any) {
                 console.error('LIVE TESTER ERROR:', e);
                 await send('error', e.message || 'An error occurred during testing');
+                const { data: errState } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+                if (errState && errState.current_state !== 'failed' && errState.current_state !== 'done') {
+                    await transitionRunState(scopedSupabase, sessionId, errState.current_state, 'failed', 'error', { error: e.message });
+                }
             } finally {
                 activePages.delete(sessionId);
-                activeSessions.delete(sessionId);
+                
+                const { data: finState } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+                if (finState && finState.current_state === 'judging') {
+                    await transitionRunState(scopedSupabase, sessionId, 'judging', 'done', 'finish_test');
+                } else if (finState && finState.current_state !== 'done' && finState.current_state !== 'failed') {
+                    await transitionRunState(scopedSupabase, sessionId, finState.current_state, 'done', 'finish_test_early');
+                }
+                
                 if (browser) await browser.close();
             }
         })();

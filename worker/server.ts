@@ -88,6 +88,7 @@ app.post('/api/live-tester', async (req, res) => {
         const body = req.body;
         const url = body.url;
         const instructions = body.instructions;
+        const intent = body.intent;
         const testDepth = body.testDepth || 'basic';
         let maxActions = 4;
         if (testDepth === 'standard') maxActions = 10;
@@ -98,7 +99,7 @@ app.post('/api/live-tester', async (req, res) => {
         }
 
         const sessionId = Math.random().toString(36).substring(7);
-        console.log(`Starting session ${sessionId}. URL: ${url}, TestDepth: ${testDepth}, MaxActions: ${maxActions}`);
+        console.log(`Starting session ${sessionId}. URL: ${url}, Intent: ${intent || 'None'}, TestDepth: ${testDepth}, MaxActions: ${maxActions}`);
         
         activeSessions.set(sessionId, true);
 

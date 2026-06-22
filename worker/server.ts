@@ -102,6 +102,65 @@ app.post('/api/live-tester/:sessionId/input', async (req, res) => {
     }
 });
 
+app.get('/api/live-tester/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+    try {
+        const scopedSupabase = getSupabase(req);
+        const { data, error } = await scopedSupabase
+            .from('test_runs')
+            .select('*')
+            .eq('id', sessionId)
+            .single();
+            
+        if (error || !data) {
+            return res.status(404).json({ error: "Session not found." });
+        }
+        
+        // If run is theoretically active but we have no browser for it, it's an orphaned run (worker restarted).
+        if (!activePages.has(sessionId) && ['planned', 'exploring', 'awaiting_input', 'judging'].includes(data.current_state)) {
+            await transitionRunState(scopedSupabase, sessionId, data.current_state, 'failed', 'worker_restarted');
+            data.current_state = 'failed';
+        }
+        
+        res.status(200).json(data);
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.post('/api/live-tester/:sessionId/resume', async (req, res) => {
+    const { sessionId } = req.params;
+    try {
+        const scopedSupabase = getSupabase(req);
+        const { data, error } = await scopedSupabase
+            .from('test_runs')
+            .select('*')
+            .eq('id', sessionId)
+            .single();
+            
+        if (error || !data) return res.status(404).json({ error: "Session not found." });
+        
+        if (['done', 'failed'].includes(data.current_state)) {
+            return res.status(400).json({ error: `Run is already in terminal state: ${data.current_state}` });
+        }
+        
+        if (activePages.has(sessionId)) {
+            return res.status(400).json({ error: "Run is currently active and processing." });
+        }
+        
+        // Cannot continue without browser context safely, so mark it failed cleanly
+        await transitionRunState(scopedSupabase, sessionId, data.current_state, 'failed', 'resume_failed_worker_restarted');
+        
+        res.status(200).json({ 
+            success: false,
+            message: "Cannot resume run because browser context was lost during worker restart. Run marked as failed cleanly.",
+            state: "failed" 
+        });
+    } catch (e: any) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 app.post('/api/live-tester', async (req, res) => {
     try {
         const body = req.body;

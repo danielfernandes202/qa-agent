@@ -290,13 +290,18 @@ app.post('/api/live-tester', async (req, res) => {
                     });
                 });
 
+                const baseObjective = instructions || "Explore the page, check for broken interactive elements, ensure the layout looks correct, and identify any accessibility issues.";
+                const objectiveText = intent 
+                    ? `Your objective: Verify whether the app fulfills this intent: "${intent}". You must flag every place reality diverges from this intent.`
+                    : `Your objective: ${baseObjective}`;
+
                 let chatHistory: any[] = [{
                     role: 'system',
                     content: [{ text: `You are an autonomous QA Testing Agent. Your task is to perform an end-to-end test on a webpage.
 You are currently navigated to the target application: ${url}
 You must ONLY test the provided target application URL. Never navigate to external websites or search engines.
 
-Your objective: ${instructions || "Explore the page, check for broken interactive elements, ensure the layout looks correct, and identify any accessibility issues."}
+${objectiveText}
 
 Instructions:
 1. Examine the screenshot provided in each turn.

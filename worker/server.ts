@@ -320,7 +320,10 @@ The JSON must strictly follow this structure:
       "title": "Short descriptive title",
       "description": "Detailed explanation of the issue",
       "element": "#optional-css-selector",
-      "suggestions": ["Suggestion 1"]
+      "suggestions": ["Suggestion 1"],
+      "intentViolated": true, // Optional: true if this bug violates the provided intent
+      "expectedByIntent": "What the intent expected (optional)",
+      "actualBehavior": "What the app actually does (optional)"
     }
   ],
   "agentLogs": ["log 1"]

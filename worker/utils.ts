@@ -10,6 +10,9 @@ export const VisualIssueSchema = z.object({
     description: z.string(),
     element: z.string().optional(),
     suggestions: z.array(z.string()),
+    intentViolated: z.boolean().optional(),
+    expectedByIntent: z.string().optional(),
+    actualBehavior: z.string().optional(),
 });
 export type VisualIssue = z.infer<typeof VisualIssueSchema>;
 

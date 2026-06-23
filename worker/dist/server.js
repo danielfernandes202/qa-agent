@@ -46,7 +46,7 @@ const path_1 = __importDefault(require("path"));
 const supabase_js_1 = require("@supabase/supabase-js");
 const state_machine_1 = require("./state-machine");
 const guardrails_1 = require("./guardrails");
-const core_1 = require("../src/ai/core");
+const ai_core_1 = require("./ai-core");
 // Only load dotenv if we're not in production (e.g. local dev)
 if (process.env.NODE_ENV !== 'production') {
     dotenv.config({ path: path_1.default.join(__dirname, '../.env') });
@@ -59,7 +59,9 @@ const app = (0, express_1.default)();
 const allowedOrigins = process.env.FRONTEND_URL
     ? [process.env.FRONTEND_URL, 'http://localhost:3000', 'http://localhost:3002']
     : ['http://localhost:3000', 'http://localhost:3002'];
-app.use((0, cors_1.default)({ origin: allowedOrigins }));
+app.use((0, cors_1.default)({
+    origin: process.env.NODE_ENV === 'production' ? allowedOrigins : (origin, callback) => callback(null, true)
+}));
 app.use(express_1.default.json());
 const activePages = new Map();
 app.delete('/api/live-tester/:sessionId', async (req, res) => {
@@ -201,7 +203,10 @@ app.post('/api/live-tester', async (req, res) => {
         // Run the agent process asynchronously
         (async () => {
             try {
+                console.log(`[Worker] Async agent IIFE started for sessionId: ${sessionId}`);
+                console.log(`[Worker] Attempting state transition planned -> exploring...`);
                 await (0, state_machine_1.transitionRunState)(scopedSupabase, sessionId, 'planned', 'exploring', 'start_browser', { url, testDepth, maxActions });
+                console.log(`[Worker] State transitioned successfully. Starting browser...`);
                 await send('log', `Starting headless browser session (Depth: ${testDepth}, Max Actions: ${maxActions})...`);
                 browser = await playwright_1.chromium.launch({
                     headless: true,
@@ -212,17 +217,23 @@ app.post('/api/live-tester', async (req, res) => {
                         '--disable-gpu'
                     ]
                 });
+                console.log(`[Worker] Chromium browser launched successfully. Creating new tab...`);
                 page = await browser.newPage({
                     viewport: { width: 1920, height: 1080 }
                 });
+                console.log(`[Worker] New browser tab created. Registering tab...`);
                 activePages.set(sessionId, page);
+                console.log(`[Worker] Navigating browser to URL: ${url}...`);
                 await send('log', `Navigating to ${url}...`);
                 try {
                     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
+                    console.log(`[Worker] Navigation completed.`);
                 }
                 catch (e) {
+                    console.error(`[Worker] Navigation error:`, e.message || e);
                     await send('log', `Navigation timeout or error, proceeding anyway: ${e.message}`);
                 }
+                console.log(`[Worker] Setting up tools and objectives for session...`);
                 const takeScreenshot = async () => {
                     try {
                         const buffer = await page.screenshot({ type: 'jpeg', quality: 60, timeout: 10000 });
@@ -241,7 +252,7 @@ app.post('/api/live-tester', async (req, res) => {
                     agentLogs.push(msg);
                     await send('log', msg);
                 };
-                const navigateTool = core_1.ai.defineTool({
+                const navigateTool = ai_core_1.ai.defineTool({
                     name: `navigateTool_${sessionId}`,
                     description: 'Navigates the browser to a specific URL.',
                     inputSchema: zod_1.z.object({ url: zod_1.z.string().url() }),
@@ -256,7 +267,7 @@ app.post('/api/live-tester', async (req, res) => {
                         return `Failed to navigate: ${e.message}`;
                     }
                 });
-                const clickTool = core_1.ai.defineTool({
+                const clickTool = ai_core_1.ai.defineTool({
                     name: `clickTool_${sessionId}`,
                     description: 'Clicks an element on the page using a CSS selector.',
                     inputSchema: zod_1.z.object({ selector: zod_1.z.string() }),
@@ -272,7 +283,7 @@ app.post('/api/live-tester', async (req, res) => {
                         return `Failed to click element: ${e.message}`;
                     }
                 });
-                const typeTool = core_1.ai.defineTool({
+                const typeTool = ai_core_1.ai.defineTool({
                     name: `typeTool_${sessionId}`,
                     description: 'Types text into an input field.',
                     inputSchema: zod_1.z.object({ selector: zod_1.z.string(), text: zod_1.z.string() }),
@@ -287,7 +298,7 @@ app.post('/api/live-tester', async (req, res) => {
                         return `Failed to type text: ${e.message}`;
                     }
                 });
-                const getPageInfoTool = core_1.ai.defineTool({
+                const getPageInfoTool = ai_core_1.ai.defineTool({
                     name: `getPageInfoTool_${sessionId}`,
                     description: 'Gets the current URL, title, and a list of interactive elements.',
                     inputSchema: zod_1.z.object({}),
@@ -322,7 +333,7 @@ app.post('/api/live-tester', async (req, res) => {
                         return `Failed to extract DOM. The page may have crashed. Error: ${e.message}`;
                     }
                 });
-                const askUserForInputTool = core_1.ai.defineTool({
+                const askUserForInputTool = ai_core_1.ai.defineTool({
                     name: `askUserForInputTool_${sessionId}`,
                     description: 'Pauses the agent and asks the human user for input, such as credentials, OTP codes, or guidance. Use this if you are stuck at a login page or CAPTCHA.',
                     inputSchema: zod_1.z.object({ question: zod_1.z.string().describe("The question or instruction for the user") }),
@@ -411,16 +422,24 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                 let actionCount = 0;
                 let finalOutput = null;
                 const sessionState = { targetUrl: url, actionHistory: [] };
+                console.log(`[Worker] Entering main action loop. maxActions: ${maxActions}`);
                 while (actionCount < maxActions) {
+                    console.log(`[Worker] Turn ${actionCount + 1}: Querying current run state from DB...`);
                     const { data: runData } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+                    console.log(`[Worker] Turn ${actionCount + 1}: DB run state is: ${runData?.current_state}`);
                     if (!runData || runData.current_state === 'failed' || runData.current_state === 'done') {
+                        console.log(`[Worker] Run state indicates aborted/done. Breaking loop.`);
                         await logInternal("Session aborted by user. Stopping test.");
                         break;
                     }
                     actionCount++;
+                    console.log(`[Worker] Turn ${actionCount}: Transitioning state to exploring/start_turn...`);
                     await (0, state_machine_1.transitionRunState)(scopedSupabase, sessionId, 'exploring', 'exploring', 'start_turn', { turn: actionCount }, actionCount, maxActions - actionCount);
+                    console.log(`[Worker] Turn ${actionCount}: State transitioned successfully. Logging turn start...`);
                     await logInternal(`Starting AI Turn ${actionCount}...`);
+                    console.log(`[Worker] Turn ${actionCount}: Taking screenshot...`);
                     const screenshotUri = await takeScreenshot();
+                    console.log(`[Worker] Turn ${actionCount}: Screenshot task done (obtained: ${screenshotUri ? 'yes' : 'no'}).`);
                     const userMessageContent = [{ text: `Turn ${actionCount}. Here is the current view of the page.` }];
                     if (screenshotUri) {
                         userMessageContent.push({ media: { url: screenshotUri, contentType: 'image/jpeg' } });
@@ -453,12 +472,13 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                         }
                     }
                     chatHistory.push({ role: 'user', content: userMessageContent });
-                    await logInternal(`Consulting LLM...`);
-                    const response = await (0, core_1.generateWithFallback)({
+                    console.log(`[Worker] Turn ${actionCount}: Consulting LLM via generateWithFallback...`);
+                    const response = await (0, ai_core_1.generateWithFallback)({
                         messages: chatHistory,
                         tools: [navigateTool, clickTool, typeTool, getPageInfoTool, askUserForInputTool],
                         returnToolRequests: true,
                     }, logInternal);
+                    console.log(`[Worker] Turn ${actionCount}: LLM response received.`);
                     chatHistory.push(response.message);
                     if (response.toolRequests && response.toolRequests.length > 0) {
                         const toolResults = [];
@@ -523,7 +543,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                 if (!finalOutput && loopEndState && loopEndState.current_state !== 'failed') {
                     await logInternal("Requesting final JSON summary from LLM...");
                     try {
-                        const finalResponse = await (0, core_1.generateWithFallback)({
+                        const finalResponse = await (0, ai_core_1.generateWithFallback)({
                             messages: [...chatHistory, { role: 'user', content: [{ text: "Please provide the final JSON report now. Ensure it matches the requested schema exactly." }] }],
                             output: { schema: utils_1.LiveTestingOutputSchema }
                         }, logInternal);
@@ -537,6 +557,9 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                 if (!finalOutput && finalStateCheck && finalStateCheck.current_state !== 'failed') {
                     await send('error', "Agent failed to produce a valid report.");
                     return; // Early return to avoid saving incomplete run
+                }
+                if (finalStateCheck && finalStateCheck.current_state === 'judging') {
+                    await (0, state_machine_1.transitionRunState)(scopedSupabase, sessionId, 'judging', 'reporting', 'generate_report');
                 }
                 if (finalOutput && Array.isArray(finalOutput.bugsIdentified)) {
                     finalOutput.bugsIdentified = finalOutput.bugsIdentified.filter((b) => b && typeof b === 'object' && b.title);
@@ -572,7 +595,7 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                         await logInternal(`Generating embeddings for ${finalOutput.bugsIdentified.length} bugs...`);
                         for (const bug of finalOutput.bugsIdentified) {
                             try {
-                                const embedResponse = await core_1.ai.embed({
+                                const embedResponse = await ai_core_1.ai.embed({
                                     embedder: 'googleai/gemini-embedding-2',
                                     content: `${bug.title}: ${bug.description}`
                                 });
@@ -611,6 +634,10 @@ When you are ready to finish, stop calling tools and just return the final JSON 
                 catch (e) {
                     await logInternal(`Error logging to Supabase: ${e.message}`);
                 }
+                const { data: postReportState } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
+                if (postReportState && postReportState.current_state === 'reporting') {
+                    await (0, state_machine_1.transitionRunState)(scopedSupabase, sessionId, 'reporting', 'done', 'finish_test');
+                }
                 await send('result', finalOutput);
             }
             catch (e) {
@@ -624,11 +651,13 @@ When you are ready to finish, stop calling tools and just return the final JSON 
             finally {
                 activePages.delete(sessionId);
                 const { data: finState } = await scopedSupabase.from('test_runs').select('current_state').eq('id', sessionId).single();
-                if (finState && finState.current_state === 'judging') {
-                    await (0, state_machine_1.transitionRunState)(scopedSupabase, sessionId, 'judging', 'done', 'finish_test');
-                }
-                else if (finState && finState.current_state !== 'done' && finState.current_state !== 'failed') {
-                    await (0, state_machine_1.transitionRunState)(scopedSupabase, sessionId, finState.current_state, 'done', 'finish_test_early');
+                if (finState && finState.current_state !== 'done' && finState.current_state !== 'failed') {
+                    if (finState.current_state === 'reporting') {
+                        await (0, state_machine_1.transitionRunState)(scopedSupabase, sessionId, 'reporting', 'done', 'finish_test');
+                    }
+                    else {
+                        await (0, state_machine_1.transitionRunState)(scopedSupabase, sessionId, finState.current_state, 'failed', 'error', { error: 'Test execution ended abruptly' });
+                    }
                 }
                 if (browser)
                     await browser.close();

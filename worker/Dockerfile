@@ -17,4 +17,4 @@ RUN npm run build
 EXPOSE 3001
 
 # Start the worker
-CMD ["npm", "start"]
+CMD ["node", "dist/server.js"]

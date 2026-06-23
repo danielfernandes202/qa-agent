@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "ts-node --transpile-only server.ts",
     "build": "tsc",
-    "start": "node dist/server.js"
+    "start": "node dist/worker/server.js"
   },
   "keywords": [],
   "author": "",

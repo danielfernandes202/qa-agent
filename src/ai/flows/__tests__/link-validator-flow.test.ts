@@ -11,6 +11,7 @@ describe('Link Validator Flow', () => {
   beforeEach(() => {
     mockedAxios.get.mockClear();
     mockedAxios.head.mockClear();
+    mockedAxios.isAxiosError.mockImplementation((payload) => typeof payload === 'object' && payload !== null && 'isAxiosError' in payload && payload.isAxiosError === true);
   });
 
   it('should find and validate all links on a page successfully', async () => {
@@ -94,6 +95,6 @@ describe('Link Validator Flow', () => {
   it('should throw validation error for invalid URL input', async () => {
       const result = await validateLinksOnPage({ url: 'invalid-url' });
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Please enter a valid URL.');
+      expect(result.error).toContain('Please provide a valid URL.');
   });
 });

@@ -1,7 +1,7 @@
 'use server';
 
 import { supabase } from '@/lib/supabase';
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/core';
 
 export interface VisualBugResult {
     id: string;

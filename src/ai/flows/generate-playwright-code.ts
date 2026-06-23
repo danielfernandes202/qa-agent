@@ -7,9 +7,9 @@
  * - GeneratePlaywrightCodeOutput - The return type for the function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai} from '@/ai/core';
 import { GeneratePlaywrightCodeInputSchema, GeneratePlaywrightCodeOutputSchema, type GeneratePlaywrightCodeInput, type GeneratePlaywrightCodeOutput } from '@/lib/schemas';
-import { executeWithFallback } from '@/ai/fallback';
+import { executeWithFallback } from '@/ai/core';
 
 export async function generatePlaywrightCode(input: GeneratePlaywrightCodeInput): Promise<GeneratePlaywrightCodeOutput> {
   return generatePlaywrightCodeFlow(input);

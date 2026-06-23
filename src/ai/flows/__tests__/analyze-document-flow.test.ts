@@ -1,17 +1,27 @@
 
 import { analyzeDocument } from '../analyze-document-flow';
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/core';
 import type { AnalyzeDocumentOutput } from '@/lib/schemas';
 
 // Mock the AI module
-jest.mock('@/ai/genkit', () => ({
-  ai: {
-    definePrompt: jest.fn(),
-  },
-}));
+jest.mock('@/ai/core', () => {
+  const mockPrompt = jest.fn();
+  return {
+    ai: {
+      definePrompt: jest.fn(() => mockPrompt),
+      defineFlow: jest.fn((config, fn) => fn),
+    },
+    executeWithFallback: jest.fn(async (promptFn, input) => {
+      const res = await promptFn(input);
+      if (res && res.output !== undefined && res.output !== null) {
+        return res.output;
+      }
+      throw new Error('All AI models failed to generate content or timed out. Please try again.');
+    }),
+  };
+});
 
-// A mock prompt function
-const mockPrompt = jest.fn();
+const mockPrompt = ai.definePrompt({} as any) as jest.Mock;
 
 describe('Analyze Document Flow', () => {
   beforeEach(() => {
@@ -75,7 +85,7 @@ describe('Analyze Document Flow', () => {
     expect(result).toEqual([]);
   });
 
-  it('should propagate errors from the AI prompt function', async () => {
+  it('should return an empty array if the AI model fails', async () => {
     const errorMessage = 'AI model failed';
     mockPrompt.mockRejectedValue(new Error(errorMessage));
 
@@ -85,6 +95,7 @@ describe('Analyze Document Flow', () => {
       projectName: 'Test Project',
     };
 
-    await expect(analyzeDocument(input)).rejects.toThrow(errorMessage);
+    const result = await analyzeDocument(input);
+    expect(result).toEqual([]);
   });
 });

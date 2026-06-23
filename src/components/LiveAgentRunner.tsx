@@ -126,7 +126,7 @@ export function LiveAgentRunner({ initialUrl = '', initialInstructions = '', aut
     
     const workerUrl = process.env.NODE_ENV === 'production' 
       ? 'https://qa-agent-production-a992.up.railway.app' 
-      : 'http://localhost:3001';
+      : `${window.location.protocol}//${window.location.hostname}:3001`;
       
     try {
       setAgentLogs(prev => [...prev, `User responded to prompt...`]);
@@ -158,12 +158,18 @@ export function LiveAgentRunner({ initialUrl = '', initialInstructions = '', aut
     cleanupRealtime();
 
     try {
+      console.log("[LiveAgentRunner] handleAnalysis started for URL:", data.url);
+      setAgentLogs(prev => [...prev, "Contacting QA Agent worker at " + (process.env.NODE_ENV === 'production' ? 'Production URL' : 'http://localhost:3001') + "..."]);
+
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
+      console.log("[LiveAgentRunner] Obtained Supabase session token:", token ? "Present" : "Absent");
 
       const workerUrl = process.env.NODE_ENV === 'production' 
         ? 'https://qa-agent-production-a992.up.railway.app' 
-        : 'http://localhost:3001';
+        : `${window.location.protocol}//${window.location.hostname}:3001`;
+      
+      console.log("[LiveAgentRunner] Sending POST request to:", `${workerUrl}/api/live-tester`);
       const response = await fetch(`${workerUrl}/api/live-tester`, {
         method: 'POST',
         headers: { 
@@ -173,41 +179,105 @@ export function LiveAgentRunner({ initialUrl = '', initialInstructions = '', aut
         body: JSON.stringify({ url: data.url, instructions: data.instructions, testDepth: data.testDepth }),
       });
 
+      console.log("[LiveAgentRunner] Worker response status:", response.status);
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
+        console.error("[LiveAgentRunner] Worker returned error status:", errData);
         throw new Error(errData.error || `Server returned ${response.status}`);
       }
 
       const { sessionId } = await response.json();
+      console.log("[LiveAgentRunner] Worker response session ID:", sessionId);
       setActiveSessionId(sessionId);
+      setAgentLogs(prev => [...prev, `Session established: ${sessionId}. Querying historical events...`]);
 
-      const { data: pastEvents } = await supabase
+      console.log("[LiveAgentRunner] Fetching past events from test_run_events where test_run_id =", sessionId);
+      const { data: pastEvents, error: pastEventsError } = await supabase
         .from('test_run_events')
         .select('*')
-        .eq('session_id', sessionId)
+        .eq('test_run_id', sessionId)
         .order('created_at', { ascending: true });
+
+      if (pastEventsError) {
+        console.error("[LiveAgentRunner] Failed to fetch past events:", pastEventsError);
+        setAgentLogs(prev => [...prev, `Warning: Failed to fetch historical logs: ${pastEventsError.message}`]);
+      } else {
+        console.log("[LiveAgentRunner] Historical events fetched count:", pastEvents?.length || 0);
+      }
+
+      const mapEvent = (evt: any) => {
+        console.log("[LiveAgentRunner] Mapping event:", evt.event_type, evt.payload);
+        if (evt.event_type === 'stream_log' && evt.payload) {
+          return {
+            type: evt.payload.stream_type,
+            data: evt.payload.data
+          };
+        }
+        
+        // Map other state transitions to human-friendly logs
+        if (evt.event_type === 'start_browser') {
+          return { type: 'log', data: `Starting browser for URL: ${evt.payload?.url || ''}` };
+        }
+        if (evt.event_type === 'ask_user') {
+          return { type: 'log', data: `Awaiting user input: ${evt.payload?.question || ''}` };
+        }
+        if (evt.event_type === 'input_received') {
+          return { type: 'log', data: `User input received.` };
+        }
+        if (evt.event_type === 'start_turn') {
+          return { type: 'log', data: `Starting AI Turn ${evt.payload?.turn || ''}...` };
+        }
+        if (evt.event_type === 'evaluate_report') {
+          return { type: 'log', data: `Evaluating final report...` };
+        }
+        if (evt.event_type === 'generate_report') {
+          return { type: 'log', data: `Generating visual bug embeddings and report...` };
+        }
+        if (evt.event_type === 'finish_test' || evt.event_type === 'finish_test_early') {
+          return { type: 'log', data: `Test execution finished.` };
+        }
+        if (evt.event_type === 'error') {
+          return { type: 'log', data: `Error: ${evt.payload?.error || ''}` };
+        }
+        
+        return null;
+      };
 
       if (pastEvents) {
         for (const evt of pastEvents) {
-          processEvent(evt.type, evt.data);
+          const mapped = mapEvent(evt);
+          if (mapped) {
+            console.log("[LiveAgentRunner] Processing past event:", mapped);
+            processEvent(mapped.type, mapped.data);
+          }
         }
       }
 
+      setAgentLogs(prev => [...prev, `Connecting to real-time subscription channel...`]);
+      console.log("[LiveAgentRunner] Connecting to Supabase Realtime channel:", `test-run-${sessionId}`);
+      
       const channel = supabase.channel(`test-run-${sessionId}`)
         .on(
           'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'test_run_events', filter: `session_id=eq.${sessionId}` },
+          { event: 'INSERT', schema: 'public', table: 'test_run_events', filter: `test_run_id=eq.${sessionId}` },
           (payload) => {
-            const { type, data } = payload.new;
-            processEvent(type, data);
+            console.log("[LiveAgentRunner] Realtime event INSERT payload.new:", payload.new);
+            const mapped = mapEvent(payload.new);
+            if (mapped) {
+              console.log("[LiveAgentRunner] Processing realtime event:", mapped);
+              processEvent(mapped.type, mapped.data);
+            }
           }
         )
-        .subscribe();
+        .subscribe((status) => {
+          console.log(`[LiveAgentRunner] Realtime channel status changed to: ${status}`);
+          setAgentLogs(prev => [...prev, `Database stream status: ${status}`]);
+        });
 
       channelRef.current = channel;
 
     } catch (err: any) {
-      console.error("Live testing failed:", err);
+      console.error("[LiveAgentRunner] Live testing failed with error:", err);
       setError(err.message || "An unknown error occurred during the analysis.");
       setIsLoading(false);
       cleanupRealtime();
@@ -218,7 +288,7 @@ export function LiveAgentRunner({ initialUrl = '', initialInstructions = '', aut
     if (activeSessionId) {
       const workerUrl = process.env.NODE_ENV === 'production' 
         ? 'https://qa-agent-production-a992.up.railway.app' 
-        : 'http://localhost:3001';
+        : `${window.location.protocol}//${window.location.hostname}:3001`;
       
       try {
         await fetch(`${workerUrl}/api/live-tester/${activeSessionId}`, {

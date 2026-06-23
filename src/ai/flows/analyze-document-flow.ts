@@ -8,9 +8,9 @@
  * - AnalyzeDocumentOutput - The return type for the analyzeDocument function.
  */
 
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/core';
 import { AnalyzeDocumentInputSchema, AnalyzeDocumentOutputSchema, type AnalyzeDocumentInput, type AnalyzeDocumentOutput } from '@/lib/schemas';
-import { executeWithFallback } from '@/ai/fallback';
+import { executeWithFallback } from '@/ai/core';
 
 export async function analyzeDocument(input: AnalyzeDocumentInput): Promise<AnalyzeDocumentOutput> {
   return analyzeDocumentFlow(input);

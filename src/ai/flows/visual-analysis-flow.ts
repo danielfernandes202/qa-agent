@@ -5,11 +5,11 @@
  * - analyzeVisuals - A function that analyzes a screenshot for UI/UX and accessibility issues.
  */
 
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/core';
 import { z } from 'zod';
 import type { VisualAnalysisInput, VisualAnalysisOutput } from '@/lib/schemas';
 import { VisualAnalysisInputSchema, VisualAnalysisOutputSchema } from '@/lib/schemas';
-import { executeWithFallback } from '@/ai/fallback';
+import { executeWithFallback } from '@/ai/core';
 
 export async function analyzeVisuals(input: VisualAnalysisInput): Promise<VisualAnalysisOutput> {
   return visualAnalysisFlow(input);

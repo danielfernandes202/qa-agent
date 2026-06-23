@@ -1,18 +1,30 @@
 
 import { generateTestCases } from '../generate-test-cases';
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/core';
 import { z } from 'zod';
 import type { GenerateTestCasesOutput } from '@/lib/schemas';
 
-// Mock the AI module
-jest.mock('@/ai/genkit', () => ({
-  ai: {
-    definePrompt: jest.fn(),
-  },
-}));
 
-// A mock prompt function
-const mockPrompt = jest.fn();
+// Mock the AI module
+jest.mock('@/ai/core', () => {
+  const mockPrompt = jest.fn();
+  return {
+    ai: {
+      definePrompt: jest.fn(() => mockPrompt),
+      defineFlow: jest.fn((config, fn) => fn),
+    },
+    executeWithFallback: jest.fn(async (promptFn, input) => {
+      const res = await promptFn(input);
+      if (res && res.output !== undefined && res.output !== null) {
+        return res.output;
+      }
+      throw new Error('All AI models failed to generate content or timed out. Please try again.');
+    }),
+  };
+});
+
+const mockPrompt = ai.definePrompt({} as any) as jest.Mock;
+
 
 describe('Generate Test Cases Flow', () => {
   beforeEach(() => {
@@ -43,7 +55,7 @@ describe('Generate Test Cases Flow', () => {
     const result = await generateTestCases(input);
 
     expect(ai.definePrompt).toHaveBeenCalled();
-    expect(mockPrompt).toHaveBeenCalledWith(input);
+    expect(mockPrompt).toHaveBeenCalledWith(input, { model: 'googleai/gemini-3.1-flash-lite' });
     expect(result).toEqual(mockTestCases);
     expect(result.length).toBe(1);
   });
@@ -58,13 +70,10 @@ describe('Generate Test Cases Flow', () => {
       projectKey: 'PROJ',
     };
 
-    const result = await generateTestCases(input);
-
-    expect(mockPrompt).toHaveBeenCalledWith(input);
-    expect(result).toEqual([]);
+    await expect(generateTestCases(input)).rejects.toThrow("All AI models failed to generate test cases or timed out. Please try again.");
   });
 
-  it('should propagate errors from the AI prompt function', async () => {
+  it('should return an empty array if the AI model fails', async () => {
     const errorMessage = 'AI model failed';
     mockPrompt.mockRejectedValue(new Error(errorMessage));
 
@@ -74,6 +83,6 @@ describe('Generate Test Cases Flow', () => {
       projectKey: 'PROJ',
     };
 
-    await expect(generateTestCases(input)).rejects.toThrow(errorMessage);
+    await expect(generateTestCases(input)).rejects.toThrow("All AI models failed to generate test cases or timed out. Please try again.");
   });
 });

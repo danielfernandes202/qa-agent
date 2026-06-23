@@ -1,17 +1,27 @@
 
 import { generatePlaywrightCode } from '../generate-playwright-code';
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/core';
 import type { GenerateTestCasesOutput, PlaywrightSetup } from '@/lib/schemas';
 
 // Mock the AI module
-jest.mock('@/ai/genkit', () => ({
-  ai: {
-    definePrompt: jest.fn(),
-  },
-}));
+jest.mock('@/ai/core', () => {
+  const mockPrompt = jest.fn();
+  return {
+    ai: {
+      definePrompt: jest.fn(() => mockPrompt),
+      defineFlow: jest.fn((config, fn) => fn),
+    },
+    executeWithFallback: jest.fn(async (promptFn, input) => {
+      const res = await promptFn(input);
+      if (res && res.output !== undefined && res.output !== null) {
+        return res.output;
+      }
+      throw new Error('All AI models failed to generate content or timed out. Please try again.');
+    }),
+  };
+});
 
-// A mock prompt function
-const mockPrompt = jest.fn();
+const mockPrompt = ai.definePrompt({} as any) as jest.Mock;
 
 describe('Generate Playwright Code Flow', () => {
   const mockTestCases: GenerateTestCasesOutput = [
@@ -57,7 +67,7 @@ test.describe('Test Project - Feature Tests', () => {
   });
 });
     `;
-    mockPrompt.mockResolvedValue({ output: { playwrightCode: mockPlaywrightCode } });
+    mockPrompt.mockResolvedValue({ text: mockPlaywrightCode });
 
     const input = {
       testCases: mockTestCases,
@@ -68,13 +78,13 @@ test.describe('Test Project - Feature Tests', () => {
     const result = await generatePlaywrightCode(input);
 
     expect(ai.definePrompt).toHaveBeenCalled();
-    expect(mockPrompt).toHaveBeenCalledWith(input);
+    expect(mockPrompt).toHaveBeenCalledWith(input, { model: 'googleai/gemini-3.1-flash-lite' });
     expect(result.playwrightCode).toContain('Test Project - Feature Tests');
     expect(result.playwrightCode).toContain('Verify successful login');
   });
 
-  it('should return a comment if the AI provides no output', async () => {
-    mockPrompt.mockResolvedValue({ output: null });
+  it('should throw an error when all fallback models provide no output', async () => {
+    mockPrompt.mockResolvedValue({ text: null });
 
     const input = {
       testCases: mockTestCases,
@@ -82,13 +92,10 @@ test.describe('Test Project - Feature Tests', () => {
       projectName: 'Test Project',
     };
 
-    const result = await generatePlaywrightCode(input);
-
-    expect(mockPrompt).toHaveBeenCalledWith(input);
-    expect(result.playwrightCode).toBe("// AI failed to generate Playwright code. Please check the input and try again.");
+    await expect(generatePlaywrightCode(input)).rejects.toThrow('All AI models failed to generate content or timed out. Please try again.');
   });
 
-  it('should propagate errors from the AI prompt function', async () => {
+  it('should throw an error when all fallback models fail', async () => {
     const errorMessage = 'AI model service unavailable';
     mockPrompt.mockRejectedValue(new Error(errorMessage));
 
@@ -98,6 +105,6 @@ test.describe('Test Project - Feature Tests', () => {
       projectName: 'Test Project',
     };
 
-    await expect(generatePlaywrightCode(input)).rejects.toThrow(errorMessage);
+    await expect(generatePlaywrightCode(input)).rejects.toThrow('All AI models failed to generate content or timed out. Please try again.');
   });
 });

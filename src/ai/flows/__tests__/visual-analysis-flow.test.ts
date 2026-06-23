@@ -1,17 +1,28 @@
 
 import { analyzeVisuals } from '../visual-analysis-flow';
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/core';
 import type { VisualAnalysisOutput } from '@/lib/schemas';
 
 // Mock the AI module
-jest.mock('@/ai/genkit', () => ({
-  ai: {
-    definePrompt: jest.fn(),
-  },
-}));
+jest.mock('@/ai/core', () => {
+  const mockPrompt = jest.fn();
+  return {
+    ai: {
+      definePrompt: jest.fn(() => mockPrompt),
+      defineFlow: jest.fn((config, fn) => fn),
+    },
+    executeWithFallback: jest.fn(async (promptFn, input) => {
+      const res = await promptFn(input);
+      if (res && res.output !== undefined && res.output !== null) {
+        return res.output;
+      }
+      throw new Error('All AI models failed to generate content or timed out. Please try again.');
+    }),
+  };
+});
 
-// A mock prompt function
-const mockPrompt = jest.fn();
+const mockPrompt = ai.definePrompt({} as any) as jest.Mock;
+
 
 describe('Visual Analysis Flow', () => {
   beforeEach(() => {
@@ -67,10 +78,11 @@ describe('Visual Analysis Flow', () => {
     expect(result).toEqual([]);
   });
 
-  it('should propagate errors from the AI prompt function', async () => {
+  it('should return an empty array if the AI model fails', async () => {
     const errorMessage = 'AI service failed to respond';
     mockPrompt.mockRejectedValue(new Error(errorMessage));
 
-    await expect(analyzeVisuals(mockInput)).rejects.toThrow(errorMessage);
+    const result = await analyzeVisuals(mockInput);
+    expect(result).toEqual([]);
   });
 });

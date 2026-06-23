@@ -1,17 +1,27 @@
 
 import { draftJiraBug } from '../draft-jira-bug-flow';
-import { ai } from '@/ai/genkit';
+import { ai } from '@/ai/core';
 import type { DraftJiraBugOutput } from '@/lib/schemas';
 
 // Mock the AI module
-jest.mock('@/ai/genkit', () => ({
-  ai: {
-    definePrompt: jest.fn(),
-  },
-}));
+jest.mock('@/ai/core', () => {
+  const mockPrompt = jest.fn();
+  return {
+    ai: {
+      definePrompt: jest.fn(() => mockPrompt),
+      defineFlow: jest.fn((config, fn) => fn),
+    },
+    executeWithFallback: jest.fn(async (promptFn, input) => {
+      const res = await promptFn(input);
+      if (res && res.output !== undefined && res.output !== null) {
+        return res.output;
+      }
+      throw new Error('All AI models failed to generate content or timed out. Please try again.');
+    }),
+  };
+});
 
-// A mock prompt function
-const mockPrompt = jest.fn();
+const mockPrompt = ai.definePrompt({} as any) as jest.Mock;
 
 describe('Draft Jira Bug Flow', () => {
   beforeEach(() => {
@@ -72,7 +82,8 @@ describe('Draft Jira Bug Flow', () => {
       projectKey: 'PROJ',
     };
 
-    await expect(draftJiraBug(input)).rejects.toThrow(errorMessage);
+    const result = await draftJiraBug(input);
+    expect(result.summary).toBe('Error: AI failed to draft bug report');
   });
 
   it('should correctly handle an attachment filename', async () => {
@@ -94,7 +105,7 @@ describe('Draft Jira Bug Flow', () => {
     const result = await draftJiraBug(input);
     expect(mockPrompt).toHaveBeenCalledWith(input);
     expect(result.attachmentName).toBe('error_log.txt');
-    expect(result.descriptionMarkdown).toContain('## Attachment(s)\\n- error_log.txt');
+    expect(result.descriptionMarkdown).toContain('## Attachment(s)\n- error_log.txt');
   });
 
 });

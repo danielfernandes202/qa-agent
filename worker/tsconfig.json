@@ -4,12 +4,13 @@
     "module": "Node16",
     "lib": ["ES2022", "DOM"],
     "outDir": "./dist",
-    "rootDir": "./",
+    "rootDir": "../",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "moduleResolution": "node16"
+    "moduleResolution": "node16",
+    "types": ["jest"]
   },
   "include": ["**/*.ts"],
   "exclude": ["node_modules", "dist"]

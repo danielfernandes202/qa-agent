@@ -11,9 +11,9 @@
  * - GenerateTestCasesOutput: Output schema containing an array of test cases.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai} from '@/ai/core';
 import { GenerateTestCasesInputSchema, GenerateTestCasesOutputSchema, type GenerateTestCasesInput, type GenerateTestCasesOutput } from '@/lib/schemas';
-import { executeWithFallback } from '@/ai/fallback';
+import { executeWithFallback } from '@/ai/core';
 
 
 export async function generateTestCases(input: GenerateTestCasesInput): Promise<GenerateTestCasesOutput> {

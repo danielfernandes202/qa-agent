@@ -8,9 +8,9 @@
  * - DraftJiraBugOutput - The return type for the draftJiraBug function.
  */
 
-import {ai} from '@/ai/genkit';
+import {ai} from '@/ai/core';
 import { DraftJiraBugInputSchema, DraftJiraBugOutputSchema, type DraftJiraBugInput, type DraftJiraBugOutput } from '@/lib/schemas';
-import { executeWithFallback } from '@/ai/fallback';
+import { executeWithFallback } from '@/ai/core';
 
 export async function draftJiraBug(input: DraftJiraBugInput): Promise<DraftJiraBugOutput> {
   return draftJiraBugFlow(input);
@@ -88,16 +88,18 @@ const draftJiraBugFlow = ai.defineFlow(
     outputSchema: DraftJiraBugOutputSchema,
   },
   async (input) => {
-    const {output} = await draftJiraBugPrompt(input);
-    if (!output) {
+    try {
+      const output = await executeWithFallback(draftJiraBugPrompt, input);
+      return output;
+    } catch (e) {
       console.warn('AI bug drafting returned no output for:', input.rawDescription.substring(0,50) + "...");
       // Return a default error structure or throw
+      const env = input.environmentHint || "Unknown";
       return {
         summary: "Error: AI failed to draft bug report",
-        descriptionMarkdown: "## Environment\nUnknown\n\n## Issue Description\nCould not process the bug description.\n\n## Steps to Reproduce\n1. Unknown\n\n## Expected Result\nCould not process the bug description.\n\n## Actual Result\nCould not process the bug description.",
-        identifiedEnvironment: input.environmentHint || "Unknown",
+        descriptionMarkdown: `## Environment\n${env}\n\n## Issue Description\nCould not process the bug description.\n\n## Steps to Reproduce\n1. Unknown\n\n## Expected Result\nCould not process the bug description.\n\n## Actual Result\nCould not process the bug description.`,
+        identifiedEnvironment: env,
       };
     }
-    return output;
   }
 );

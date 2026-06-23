@@ -10,7 +10,7 @@ import path from 'path';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { transitionRunState } from './state-machine';
 import { checkGuardrails, SessionState } from './guardrails';
-import { ai, generateWithFallback } from '../src/ai/core';
+import { ai, generateWithFallback } from './ai-core';
 
 // Only load dotenv if we're not in production (e.g. local dev)
 if (process.env.NODE_ENV !== 'production') {
@@ -249,7 +249,7 @@ app.post('/api/live-tester', async (req, res) => {
                     description: 'Navigates the browser to a specific URL.',
                     inputSchema: z.object({ url: z.string().url() }) as any,
                     outputSchema: z.string() as any,
-                }, async ({ url }) => {
+                }, async ({ url }: { url: string }) => {
                     try {
                         await logInternal(`Tool Action: Navigating to ${url}`);
                         await page!.goto(url, { waitUntil: 'domcontentloaded', timeout: 15000 });
@@ -264,7 +264,7 @@ app.post('/api/live-tester', async (req, res) => {
                     description: 'Clicks an element on the page using a CSS selector.',
                     inputSchema: z.object({ selector: z.string() }) as any,
                     outputSchema: z.string() as any,
-                }, async ({ selector }) => {
+                }, async ({ selector }: { selector: string }) => {
                     try {
                         await logInternal(`Tool Action: Clicking on element ${selector}`);
                         await page!.click(selector, { timeout: 8000 });
@@ -280,7 +280,7 @@ app.post('/api/live-tester', async (req, res) => {
                     description: 'Types text into an input field.',
                     inputSchema: z.object({ selector: z.string(), text: z.string() }) as any,
                     outputSchema: z.string() as any,
-                }, async ({ selector, text }) => {
+                }, async ({ selector, text }: { selector: string; text: string }) => {
                     try {
                         await logInternal(`Tool Action: Typing "${text}" into ${selector}`);
                         await page!.fill(selector, text, { timeout: 8000 });
@@ -329,7 +329,7 @@ app.post('/api/live-tester', async (req, res) => {
                     description: 'Pauses the agent and asks the human user for input, such as credentials, OTP codes, or guidance. Use this if you are stuck at a login page or CAPTCHA.',
                     inputSchema: z.object({ question: z.string().describe("The question or instruction for the user") }) as any,
                     outputSchema: z.string() as any,
-                }, async (args) => {
+                }, async (args: { question?: string }) => {
                     const question = args?.question || "Please provide the requested input (e.g. credentials) to proceed.";
                     await logInternal(`Tool Action: Asking user for input: "${question}"`);
                     await send('prompt', { message: question });
